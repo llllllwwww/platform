@@ -8,7 +8,9 @@
 
 ## 快速开始
 
-直接双击 `隧道三维数字孪生平台.html`，或在浏览器中打开该文件。
+**在线访问（GitHub Pages）**：<https://llllllwwww.github.io/platform/>
+
+**本地运行**：直接双击 `隧道三维数字孪生平台.html`（或 `index.html`），或在浏览器中打开该文件。
 
 > `vendor/` 目录必须与本文件保持同级，请勿单独移动 HTML。
 
@@ -48,9 +50,12 @@
 
 ```
 .
+├── index.html                   # 站点入口（自动跳转到平台主页面）
 ├── 隧道三维数字孪生平台.html    # 平台主文件（单文件应用）
 ├── 平台使用说明.md              # 完整使用说明（11 章，含演示脚本与算法说明）
+├── .nojekyll                    # 关闭 GitHub Pages 的 Jekyll 处理
 ├── .gitignore
+├── .gitattributes
 ├── README.md
 └── vendor/
     └── three.min.js             # three.js r160（本地内置，保证离线可用）
