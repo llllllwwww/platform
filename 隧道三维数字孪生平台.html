@@ -414,6 +414,7 @@
     <div class="sec-h">操作</div>
     <div class="btns">
       <div class="btn wide pri" id="btnCarView2">▶ 进入检测车第一视角</div>
+      <div class="btn wide" id="btnFly">🚁 自由飞行漫游（G 键）</div>
       <div class="btn" id="btnNext">下一处病害</div>
       <div class="btn" id="btnFit">重置视角</div>
       <div class="btn" id="btnIsoCut">剖切总览</div>
@@ -505,6 +506,8 @@
 </div>
 
 <div id="ringFlash"></div>
+
+<div id="flyHud">自由飞行：W/S 前后 · A/D 左右 · Q/E 升降 · Shift 加速 · 按住左键拖动转视角 · G 退出</div>
 
 <div id="loading">
   <div class="ring"></div>
@@ -2173,13 +2176,11 @@ function toggleFly(force){
     fly.yaw   = Math.atan2(-d.x, -d.z);
     fly.pitch = Math.asin(clamp(d.y, -1, 1));
     camera.rotation.order = 'YXZ';
-    flyHudEl.classList.add('on');
-    btn.classList.add('pri');
-    btn.textContent = '✕ 退出自由飞行（G 键）';
+    if (flyHudEl) flyHudEl.classList.add('on');
+    if (btn){ btn.classList.add('pri'); btn.textContent = '✕ 退出自由飞行（G 键）'; }
   } else {
-    flyHudEl.classList.remove('on');
-    btn.classList.remove('pri');
-    btn.textContent = '🚁 自由飞行漫游（G 键）';
+    if (flyHudEl) flyHudEl.classList.remove('on');
+    if (btn){ btn.classList.remove('pri'); btn.textContent = '🚁 自由飞行漫游（G 键）'; }
     // 由当前相机姿态反解轨道参数，退出时不跳变
     var d2 = new THREE.Vector3();
     camera.getWorldDirection(d2);
@@ -2189,7 +2190,7 @@ function toggleFly(force){
     orbit.theta = Math.atan2(-d2.x, -d2.z);
   }
 }
-document.getElementById('btnFly').onclick = function(){ toggleFly(); };
+(function(){ var b = document.getElementById('btnFly'); if (b) b.onclick = function(){ toggleFly(); }; })();
 
 window.addEventListener('keydown', function(e){
   if (!fly.on) return;
