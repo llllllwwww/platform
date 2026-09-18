@@ -1,0 +1,35 @@
+# 操作系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+~$*
+.vscode/
+.idea/
+
+# Office 临时锁文件
+~$*.docx
+~$*.pptx
+~$*.xlsx
+
+# Python 虚拟环境与缓存（若在该目录下运行脚本）
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Node
+node_modules/
+
+# 大体积二进制/媒体文件（本仓库只托管平台代码与文档）
+*.pptx
+*.ppt
+*.mp4
+*.avi
+*.mov
+*.zip
+*.7z
+*.rar
+*.pem
+*.key
