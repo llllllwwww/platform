@@ -120,7 +120,7 @@
   .stat-row .vl{width:20px;text-align:right;font-weight:600;}
 
   /* 病害 -->
-  #defectList{display:flex;flex-direction:column;gap:5px;max-height:none;}
+  #defectList{display:flex;flex-direction:column;gap:5px;max-height:212px;overflow-y:auto;}
   .d-card{
     display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;
     background:rgba(18,38,62,.6);border:1px solid rgba(64,148,214,.16);transition:.15s;
@@ -167,6 +167,25 @@
     background:#7f9bb4;transition:.2s;}
   .tg input:checked + .sw{background:rgba(47,212,255,.35);}
   .tg input:checked + .sw::after{left:17px;background:var(--accent);box-shadow:0 0 9px var(--accent);}
+  /* ---- 病害清单（移植自病害展示 Demo） ---- */
+  .dlist{max-height:212px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
+  .dlist::-webkit-scrollbar{width:5px;}
+  .dlist::-webkit-scrollbar-thumb{background:rgba(64,148,214,.45);border-radius:3px;}
+  .d-row{display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:6px;cursor:pointer;
+    background:rgba(18,38,62,.6);border:1px solid rgba(64,148,214,.16);font-size:12px;color:#bfd9f0;transition:.15s;}
+  .d-row:hover{background:rgba(32,74,116,.8);border-color:rgba(47,212,255,.5);transform:translateX(2px);}
+  .d-row.sel{background:rgba(38,104,160,.85);border-color:var(--accent);}
+  .d-row .did{font-family:Consolas,monospace;color:#fff;width:46px;flex:0 0 auto;}
+  .d-row .dtp{flex:1;}
+  .d-row .drg{font-family:Consolas,monospace;color:#8fb3d4;font-size:11px;flex:0 0 auto;}
+  .d-row .go{font-size:11px;color:#7fd4ff;border:1px solid rgba(125,211,252,.4);background:transparent;
+    border-radius:4px;padding:1px 7px;cursor:pointer;flex:0 0 auto;}
+  .d-row .go:hover{background:rgba(125,211,252,.18);}
+  /* ---- 自由飞行 HUD（移植） ---- */
+  #flyHud{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;display:none;
+    padding:8px 22px;border-radius:9px;background:rgba(6,15,26,.92);border:1px solid var(--accent);
+    color:#cdf1ff;font-size:13px;letter-spacing:.5px;pointer-events:none;box-shadow:0 4px 22px rgba(0,0,0,.5);}
+  #flyHud.on{display:block;}
   .tg:hover{color:#fff;}
 
   /* 切片 */
@@ -365,6 +384,11 @@
   </div>
 
   <div class="sec">
+    <div class="sec-h">病害清单 <span class="tail">点击行选中 · 「定位」飞行</span></div>
+    <div class="dlist" id="defectList"></div>
+  </div>
+
+  <div class="sec">
     <div class="sec-h">显示控制</div>
     <div class="toggles">
       <label class="tg"><input type="checkbox" id="ckShell" checked><span class="sw"></span>管片衬砌（透视）</label>
@@ -376,6 +400,8 @@
       <label class="tg"><input type="checkbox" id="ckLabelAll"><span class="sw"></span>标注全部病害</label>
       <label class="tg"><input type="checkbox" id="ckCar" checked><span class="sw"></span>检测车 / 机械臂</label>
       <label class="tg"><input type="checkbox" id="ckRay"><span class="sw"></span>GPR 电磁波射线</label>
+      <label class="tg"><input type="checkbox" id="ckStars" checked><span class="sw"></span>星空背景</label>
+      <label class="tg"><input type="checkbox" id="ckCity" checked><span class="sw"></span>城市天际线</label>
     </div>
     <div class="slice-row">
       <span>纵剖切面</span>
@@ -653,6 +679,108 @@ inner.position.set(PT.x0 + 8, 0.4, 0); scene.add(inner);
   }));
   strip2.position.set((PT.x0 + X_END) / 2, 0, 2.30);
   scene.add(strip2);
+})();
+
+// ==================================================================== 背景环境（移植自病害展示 Demo）
+// 星空 + 程序化夜景城市（亮窗纹理 + 楼顶障碍灯）+ 远景地平面。
+// 背景层不受场景雾影响（fog:false），按距离手动降透明度形成空气层次；
+// 楼群避开隧道/地层走廊，由"显示控制"中的开关单独控制显隐。
+var bgStars = null;
+var bgCity = new THREE.Group();
+var bgBeacons = [];
+
+function buildingTexture(w, h, seed){
+  var cols = Math.max(2, Math.round(w / 3));
+  var rows = Math.max(3, Math.round(h / 3));
+  var cv = document.createElement('canvas');
+  cv.width = cols * 8; cv.height = rows * 8;
+  var ctx = cv.getContext('2d');
+  ctx.fillStyle = '#0a0f1a';
+  ctx.fillRect(0, 0, cv.width, cv.height);
+  var s = seed * 131 + 7;
+  function rnd(){ s = (s * 16807 + 17) % 2147483647; return s / 2147483647; }
+  for (var yy = 0; yy < rows; yy++){
+    for (var xx = 0; xx < cols; xx++){
+      if (rnd() < 0.34){
+        ctx.fillStyle = rnd() < 0.6
+          ? 'rgba(255,205,120,' + (0.35 + rnd() * 0.6).toFixed(2) + ')'
+          : 'rgba(150,210,255,' + (0.30 + rnd() * 0.5).toFixed(2) + ')';
+        ctx.fillRect(xx * 8 + 2, yy * 8 + 2, 4, 5);
+      }
+    }
+  }
+  var tex = new THREE.CanvasTexture(cv);
+  tex.magFilter = THREE.NearestFilter;
+  return tex;
+}
+
+(function buildBackground(){
+  // ---- 星空（上半球随机分布，微闪）
+  (function(){
+    var N = 900, pos = new Float32Array(N * 3);
+    for (var i = 0; i < N; i++){
+      var th = Math.random() * Math.PI * 2;
+      var ph = Math.acos(1 - Math.random() * 0.92);
+      var r = 420;
+      pos[i * 3]     = r * Math.sin(ph) * Math.cos(th);
+      pos[i * 3 + 1] = r * Math.cos(ph) + 8;
+      pos[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    bgStars = new THREE.Points(g, new THREE.PointsMaterial({
+      color: 0xbfd6ff, size: 1.5, sizeAttenuation: false,
+      transparent: true, opacity: 0.8, fog: false, depthWrite: false }));
+    scene.add(bgStars);
+  })();
+
+  // ---- 远景地平面（城市坐落的基准面，位于地层模型之下）
+  (function(){
+    var plane = new THREE.Mesh(
+      new THREE.PlaneGeometry(900, 900),
+      new THREE.MeshBasicMaterial({ color: 0x070d18 }));
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.set(24, -13.1, 0);
+    scene.add(plane);
+    var grid = new THREE.GridHelper(900, 90, 0x1c3350, 0x112136);
+    grid.position.set(24, -13.05, 0);
+    grid.material.transparent = true;
+    grid.material.opacity = 0.30;
+    scene.add(grid);
+  })();
+
+  // ---- 城市楼群：环绕场地，避开隧道走廊（x 向 ±30、z 向 ±30 以内不放楼）
+  var placed = 0, guard = 0;
+  while (placed < 110 && guard++ < 3000){
+    var ang = Math.random() * Math.PI * 2;
+    var dist = 75 + Math.random() * 245;
+    var x = 24 + Math.cos(ang) * dist;
+    var z = Math.sin(ang) * dist;
+    if (Math.abs(z) < 30 && x > -30 && x < 85) continue;
+    var w = 8 + Math.random() * 16, d = 8 + Math.random() * 16;
+    var tall = ang > Math.PI * 0.7 && ang < Math.PI * 1.3;   // 西侧"市中心"更高
+    var h = 12 + Math.random() * 28 + (tall ? Math.random() * Math.random() * 85 : 0);
+    var distC = Math.sqrt((x - 24) * (x - 24) + z * z);
+    var op = clamp(1.05 - distC / 380, 0.16, 0.9);
+    var sideMat = new THREE.MeshBasicMaterial({
+      map: buildingTexture(w, h, placed), transparent: true, opacity: op, fog: false });
+    var topMat = new THREE.MeshBasicMaterial({
+      color: 0x0a0f18, transparent: true, opacity: op, fog: false });
+    var box = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+      [sideMat, sideMat, topMat, topMat, sideMat, sideMat]);
+    box.position.set(x, h / 2 - 13, z);
+    bgCity.add(box);
+    if (h > 68){
+      var beacon = new THREE.Mesh(
+        new THREE.SphereGeometry(0.9, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xff4455, transparent: true, fog: false }));
+      beacon.position.set(x, h - 13 + 1.1, z);
+      bgCity.add(beacon);
+      bgBeacons.push({ mesh: beacon, phase: Math.random() * Math.PI * 2 });
+    }
+    placed++;
+  }
+  scene.add(bgCity);
 })();
 
 // ==================================================================== 根组
@@ -1038,6 +1166,7 @@ function layerRadius(d){
 
     core.quaternion.copy(quat);
     core.scale.copy(scale);
+    core.position.copy(pos);   // [修复] 病害体此前未定位，全部堆叠在原点
     core.userData.defect = d;
     grp.add(core);
 
@@ -1047,12 +1176,14 @@ function layerRadius(d){
       haloMesh = makeHalo(t.color, haloR);
       haloMesh.quaternion.copy(quat);
       haloMesh.scale.copy(scale);
+      haloMesh.position.copy(pos);   // [修复] 光晕随病害体定位
       haloMesh.userData.defect = d;
       grp.add(haloMesh);
     } else {
       haloR = 0.36;
       haloMesh = makeHalo(t.color, haloR);
       haloMesh.quaternion.copy(quat);
+      haloMesh.position.copy(pos);   // [修复] 光晕随病害体定位
       grp.add(haloMesh);
     }
 
@@ -1082,9 +1213,25 @@ function layerRadius(d){
                     ' · ' + d.id.replace('D-', '') + ' · ' + d.ring + '环';
     labelLayer.appendChild(lbl);
 
+    // 外围高亮框（悬停 / 选中时显示，不缩放不晃动；移植自病害展示 Demo）
+    var hbox = new THREE.Box3().setFromObject(core);
+    hbox.expandByScalar(0.16);
+    var hsz = hbox.getSize(new THREE.Vector3());
+    var hct = hbox.getCenter(new THREE.Vector3());
+    var hgeo = new THREE.BoxGeometry(Math.max(hsz.x, 0.08), Math.max(hsz.y, 0.08), Math.max(hsz.z, 0.08));
+    var hlBox = new THREE.Mesh(hgeo, new THREE.MeshBasicMaterial({
+      color: c, transparent: true, opacity: 0.13, depthWrite: false }));
+    var hlEdge = new THREE.LineSegments(new THREE.EdgesGeometry(hgeo),
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 }));
+    hlBox.position.copy(hct);
+    hlEdge.position.copy(hct);
+    hlBox.visible = hlEdge.visible = false;
+    grp.add(hlBox, hlEdge);
+
     gDefect.add(grp);
     defectMeshes.push({ def:d, mesh:core, group:grp, halo:haloMesh, haloR:haloR,
-                        pos:pos, anchor:out, lbl:lbl, out:out });
+                        pos:pos, anchor:out, lbl:lbl, out:out,
+                        hlBox:hlBox, hlEdge:hlEdge, haloScale0:haloMesh.scale.clone() });
   });
 })();
 
@@ -1276,6 +1423,8 @@ Orbit.prototype.apply = function(){
   this.cam.position.set(x, y, z);
   this.cam.lookAt(this.target);
 };
+// [修复] focusDefect 依赖此方法，此前未定义（"下一处病害"会抛 TypeError）
+Orbit.prototype.camPosition = function(){ return this.cam.position.clone(); };
 var orbit = new Orbit(camera, renderer.domElement);
 
 // 视角预设
@@ -1298,6 +1447,7 @@ var camTween = null;
 function setView(name, instant){
   var v = VIEWS[name];
   if (!v) return;
+  if (fly.on) toggleFly(false);               // 视角预设基于轨道控制，先退出飞行
   // 该预设是否自带剖切
   var pc = PRESET_CUT[name];
   if (instant){
@@ -1538,10 +1688,29 @@ function refreshVisibility(){
   }
 }
 
-// -------------------------------------------------------- 病害列表
+// -------------------------------------------------------- 病害清单（点击选中 / 定位飞行）
 (function initList(){
-  var host = document.getElementById('detailEmpty');
-  // 在左侧"病害等级筛选"下方无需列表，右侧详情承担展示
+  var host = document.getElementById('defectList');
+  DEFECTS.forEach(function(d){
+    var t = TYPE[d.T];
+    var row = document.createElement('div');
+    row.className = 'd-row';
+    row.dataset.id = d.id;
+    row.innerHTML =
+      '<span style="color:' + LEVEL[d.L].color + '">■</span>' +
+      '<span class="did">' + d.id + '</span>' +
+      '<span class="dtp">' + t.name + '</span>' +
+      '<span class="drg">' + d.ring + '环/' + fmt(d.az, 0) + '°</span>' +
+      '<button class="go" data-fly="' + d.id + '">定位</button>';
+    row.onclick = function(ev){
+      var flyId = ev.target && ev.target.dataset ? ev.target.dataset.fly : null;
+      var dm = defectMeshes.filter(function(m){ return m.def.id === (flyId || d.id); })[0];
+      if (!dm) return;
+      select(dm);
+      if (flyId) focusDefect(dm);      // 「定位」按钮：选中并飞行聚焦
+    };
+    host.appendChild(row);
+  });
 })();
 
 // -------------------------------------------------------- 详情面板
@@ -1754,6 +1923,9 @@ renderer.domElement.addEventListener('pointerup', function(e){
 });
 renderer.domElement.addEventListener('pointermove', function(e){
   var hit = pick(e);
+  state.hover = hit
+    ? (defectMeshes.filter(function(dm){ return dm.def === hit; })[0] || null)
+    : null;
   if (hit){
     var t = TYPE[hit.T];
     tipEl.style.display = 'block';
@@ -1769,7 +1941,7 @@ renderer.domElement.addEventListener('pointermove', function(e){
     renderer.domElement.style.cursor = '';
   }
 });
-renderer.domElement.addEventListener('pointerleave', function(){ tipEl.style.display = 'none'; });
+renderer.domElement.addEventListener('pointerleave', function(){ tipEl.style.display = 'none'; state.hover = null; });
 
 function pick(e){
   var objs = [];
@@ -1788,7 +1960,12 @@ function select(dm){
   state.sel = dm || null;
   defectMeshes.forEach(function(o){
     o.lbl.classList.toggle('sel', dm === o);
-    o.group.scale.setScalar(dm === o ? 1.42 : 1);
+    // 选中反馈改为"外围高亮框"（见 frame 循环），不再整体缩放——
+    // 整组缩放会把绝对坐标的引线/标签锚点甩离病害本体，且带来晃动感
+  });
+  // 病害清单选中态同步
+  document.querySelectorAll('#defectList .d-row').forEach(function(r){
+    r.classList.toggle('sel', !!(dm && r.dataset.id === dm.def.id));
   });
   renderDetail(dm);
   drawRing(dm);
@@ -1820,6 +1997,8 @@ bind('ckLabel',  function(v){
 bind('ckLabelAll', function(){ /* 由 updateLabels 每帧读取，无需额外处理 */ });
 bind('ckCar',    function(v){ gCar.visible = v; });
 bind('ckRay',    function(v){ gRay.visible = v; });
+bind('ckStars',  function(v){ if (bgStars) bgStars.visible = v; });
+bind('ckCity',   function(v){ bgCity.visible = v; });
 
 // 自定义 ShaderMaterial 的透明度调节
 document.getElementById('ckShell').addEventListener('change', function(){
@@ -1963,12 +2142,102 @@ window.addEventListener('pointermove', function(e){
   }
 });
 window.addEventListener('pointerup', function(){ fp.drag = false; });
-// 键盘辅助：F 切换第一视角，空格暂停/继续扫掠
+// 键盘辅助：F 切换第一视角，G 切换自由飞行，空格暂停/继续扫掠，Esc 退出
 window.addEventListener('keydown', function(e){
   if (e.key === 'f' || e.key === 'F'){ toggleFP(); }
+  if (e.key === 'g' || e.key === 'G'){ toggleFly(); }
   if (e.key === 'Escape' && fp.on){ toggleFP(false); }
+  if (e.key === 'Escape' && fly.on){ toggleFly(false); }
   if (e.key === ' ' && fp.on){ fp.sweep = !fp.sweep; e.preventDefault(); }
 });
+
+// ==================================================================== 自由飞行漫游（G 键）
+// 移植自病害展示 Demo 的移动方式：按住左键拖动转视角，WASD 相对相机
+// 自由飞行（前进含俯仰），Q/E 垂直升降，Shift 加速。
+// 与轨道控制 / 检测车第一视角互斥。
+var fly = { on:false, yaw:0, pitch:0, keys:{}, drag:false, lx:0, ly:0 };
+var flyHudEl = document.getElementById('flyHud');
+
+function toggleFly(force){
+  var want = (force === undefined) ? !fly.on : !!force;
+  if (want === fly.on) return;
+  fly.on = want;
+  var btn = document.getElementById('btnFly');
+  if (fly.on){
+    if (fp.on) toggleFP(false);                 // 与第一视角互斥
+    orbit.autoRotate = false; syncRotBtn();
+    camTween = null;
+    // 以当前相机姿态初始化 yaw / pitch
+    var d = new THREE.Vector3();
+    camera.getWorldDirection(d);
+    fly.yaw   = Math.atan2(-d.x, -d.z);
+    fly.pitch = Math.asin(clamp(d.y, -1, 1));
+    camera.rotation.order = 'YXZ';
+    flyHudEl.classList.add('on');
+    btn.classList.add('pri');
+    btn.textContent = '✕ 退出自由飞行（G 键）';
+  } else {
+    flyHudEl.classList.remove('on');
+    btn.classList.remove('pri');
+    btn.textContent = '🚁 自由飞行漫游（G 键）';
+    // 由当前相机姿态反解轨道参数，退出时不跳变
+    var d2 = new THREE.Vector3();
+    camera.getWorldDirection(d2);
+    orbit.target.copy(camera.position).addScaledVector(d2, 12);
+    orbit.dist  = 12;
+    orbit.phi   = Math.acos(clamp(-d2.y, -1, 1));
+    orbit.theta = Math.atan2(-d2.x, -d2.z);
+  }
+}
+document.getElementById('btnFly').onclick = function(){ toggleFly(); };
+
+window.addEventListener('keydown', function(e){
+  if (!fly.on) return;
+  var k = e.key.toLowerCase();
+  if ('wasdqe'.indexOf(k) >= 0 || k === 'shift' || k === ' '){
+    fly.keys[k] = true;
+    if (k === ' ') e.preventDefault();
+  }
+});
+window.addEventListener('keyup', function(e){
+  fly.keys[e.key.toLowerCase()] = false;
+});
+window.addEventListener('blur', function(){ fly.keys = {}; });
+
+// 飞行模式下的视角拖动（按住左键）
+renderer.domElement.addEventListener('pointerdown', function(e){
+  if (!fly.on || e.button !== 0) return;
+  fly.drag = true; fly.lx = e.clientX; fly.ly = e.clientY;
+});
+window.addEventListener('pointermove', function(e){
+  if (!fly.on || !fly.drag) return;
+  fly.yaw  -= (e.clientX - fly.lx) * 0.0038;
+  fly.pitch = clamp(fly.pitch - (e.clientY - fly.ly) * 0.0038, -1.5, 1.5);
+  fly.lx = e.clientX; fly.ly = e.clientY;
+});
+window.addEventListener('pointerup', function(){ fly.drag = false; });
+
+var _flyFwd = new THREE.Vector3(), _flyRight = new THREE.Vector3(), _flyV = new THREE.Vector3();
+function flyUpdate(dt){
+  if (!fly.on) return;
+  var sp = (fly.keys['shift'] ? 24 : 8) * dt;
+  var cp = Math.cos(fly.pitch);
+  _flyFwd.set(-Math.sin(fly.yaw) * cp, Math.sin(fly.pitch), -Math.cos(fly.yaw) * cp);
+  _flyRight.set(Math.cos(fly.yaw), 0, -Math.sin(fly.yaw));
+  _flyV.set(0, 0, 0);
+  if (fly.keys['w']) _flyV.add(_flyFwd);
+  if (fly.keys['s']) _flyV.sub(_flyFwd);
+  if (fly.keys['d']) _flyV.add(_flyRight);
+  if (fly.keys['a']) _flyV.sub(_flyRight);
+  if (fly.keys['e']) _flyV.y += 1;
+  if (fly.keys['q']) _flyV.y -= 1;
+  if (_flyV.lengthSq() > 0) camera.position.addScaledVector(_flyV.normalize(), sp);
+  // 漫游软边界（场地外扩，防止飞丢）
+  camera.position.x = clamp(camera.position.x, -60, 110);
+  camera.position.y = clamp(camera.position.y, -16, 80);
+  camera.position.z = clamp(camera.position.z, -50, 50);
+  camera.rotation.set(fly.pitch, fly.yaw, 0);
+}
 
 // ---------------------------------------------------------------- 第一视角相机
 var _carDir = new THREE.Vector3(), _carUp = new THREE.Vector3();
@@ -2268,16 +2537,35 @@ function frame(){
   if (orbit.autoRotate){
     orbit.theta += dt * 0.16;
   }
-  if (!fp.on) orbit.apply();
+  if (!fp.on && !fly.on) orbit.apply();
+  flyUpdate(dt);
 
-  // 病害脉冲（光晕随选中缩放，形成呼吸式高亮）
+  // 病害脉冲（光晕呼吸；保留各病害本体的基础拉伸比例，不再整体缩放）
   defectMeshes.forEach(function(dm, i){
     if (!dm.halo) return;
     var pulse = 1 + 0.09 * Math.sin(t * 2.4 + i * 0.9);
-    dm.halo.scale.setScalar((state.sel === dm ? 1.40 : 1) * pulse);
+    dm.halo.scale.copy(dm.haloScale0).multiplyScalar((state.sel === dm ? 1.18 : 1) * pulse);
     dm.halo.material.opacity = (state.sel === dm ? 0.42 : 0.28) +
                                 0.12 * (1 + Math.sin(t * 2.4 + i)) / 2;
   });
+
+  // 外围高亮框（悬停 / 选中时显示；移植自病害展示 Demo）
+  defectMeshes.forEach(function(dm){
+    if (!dm.hlBox) return;
+    var on = (state.hover === dm || state.sel === dm) && dm.group.visible;
+    dm.hlBox.visible = dm.hlEdge.visible = on;
+    if (on) dm.hlBox.material.opacity = (state.sel === dm)
+      ? 0.10 + 0.05 * Math.sin(t * 4) : 0.13;
+  });
+
+  // 背景动效：星光微闪 + 城市楼顶障碍灯
+  if (bgStars && bgStars.visible) bgStars.material.opacity = 0.75 + Math.sin(t * 1.7) * 0.1;
+  for (var bi = 0; bi < bgBeacons.length; bi++){
+    var bk = bgBeacons[bi];
+    if (!bk.mesh.parent || !bk.mesh.parent.visible) continue;
+    var bs = Math.max(0, Math.sin(t * 2.2 + bk.phase));
+    bk.mesh.material.opacity = 0.12 + 0.88 * bs * bs * bs;
+  }
 
   // 检测车行进：第一视角按作业速度匀速遍历，普视模式按时间巡游
   var car = gCar.userData.car;
