@@ -343,6 +343,7 @@
     <button class="vbtn" data-view="crown">拱顶特写</button>
     <button class="vbtn" data-view="invert">仰拱特写</button>
     <button class="vbtn" id="btnCarView">检测车第一视角</button>
+    <button class="vbtn" id="btnPause">⏸ 暂停检测（P）</button>
     <button class="vbtn" id="btnRotate">自动旋转</button>
   </div>
 </div>
@@ -414,6 +415,7 @@
     <div class="sec-h">操作</div>
     <div class="btns">
       <div class="btn wide pri" id="btnCarView2">▶ 进入检测车第一视角</div>
+      <div class="btn wide" id="btnPause2">⏸ 暂停 / 继续检测（P）</div>
       <div class="btn wide" id="btnFly">🚁 自由飞行漫游（G 键）</div>
       <div class="btn" id="btnNext">下一处病害</div>
       <div class="btn" id="btnFit">重置视角</div>
@@ -486,7 +488,7 @@
 <!-- ================= 检测车第一视角 HUD ================= -->
 <div id="carHud">
   <div class="ch-top">
-    <span class="ch-rec"><i></i>REC</span>
+    <span class="ch-rec"><i></i><span class="rec-txt">REC</span></span>
     <span class="ch-t">检测车第一视角 · 探地雷达实时采集</span>
     <span class="ch-sp">GPR 400 MHz</span>
   </div>
@@ -1248,16 +1250,25 @@ var carArmUnits = [];            // 各机械臂的可动部件，供逐帧动�
 // 机械臂布置：横向偏移 / 臂长 / 抬升基准角 / 相位
 // 车体局部 +Z 为行进方向；大臂沿 +Z 建模，靠 rotation.x 抬升。
 // 绕 X 旋转 α 时 (0,0,L) → (0, −L·sinα, L·cosα)，故 **α 取负值 = 臂上抬**。
+//
+// 结构关系（关键在于"连成一体"，避免机械臂悬空）：
+//   平板车底板  deckTop = -0.78（车架平台面）
+//   → 立柱 MAST 自底板竖直向上，立于 z = 0.85（三根立柱）
+//   → 柱顶即肩关节 (carCfg.shoulderY, carCfg.shoulderZ)，机械臂由此伸出
+//   立柱同时用斜撑与底板下的车架纵梁相连，第三人称视角下可见完整连接
 var carCfg = {
-  // 肩关节置于相机前方偏下的"天线阵基座"上，摆幅半径小，保证第一视角内可见
-  shoulderY:  0.10,              // 肩关节高度（车体局部坐标；相机在 y=0.34，故略低于视线）
-  shoulderZ:  1.00,              // 肩关节纵向位置（相机在 z=-0.18，故位于相机前方 1.18 m）
+  deckY:     -0.78,              // 平板车底板（车架平台面）高度
+  deckZ0:    -1.15,              // 底板纵向范围（尾 / 头）
+  deckZ1:     1.20,
+  mastZ:      0.85,              // 立柱所在纵向位置
+  shoulderY:  0.10,              // 肩关节高度（相机在 y=0.34，故略低于视线）
+  shoulderZ:  0.85,              // 肩关节纵向位置（= mastZ，柱顶）
   // baseAng: 大臂仰角（负值=上抬）；elbow: 肘部相对角（负值=小臂继续上抬）
   // 取值使三只臂的天线阵落在第一视角画面中部，且不被底部 HUD 遮挡
   units: [
-    { offX:  0.42, len: 0.70, baseAng:-0.78, elbow:-0.10, phase: 0.0 },   // 左臂 → 拱顶左
-    { offX:  0.00, len: 0.70, baseAng:-0.82, elbow:-0.10, phase: 2.1 },   // 中臂 → 拱顶
-    { offX: -0.42, len: 0.70, baseAng:-0.86, elbow:-0.10, phase: 4.2 }    // 右臂 → 拱顶右
+    { offX:  0.44, len: 0.72, baseAng:-0.78, elbow:-0.10, phase: 0.0 },   // 左臂 → 拱顶左
+    { offX:  0.00, len: 0.72, baseAng:-0.78, elbow:-0.10, phase: 2.1 },   // 中臂 → 拱顶
+    { offX: -0.44, len: 0.72, baseAng:-0.78, elbow:-0.10, phase: 4.2 }    // 右臂 → 拱顶右
   ],
   sweep: 0.24,                   // 扫查摆幅 (rad)
   rate: 1.25                     // 扫查角频率 (rad/s)
@@ -1342,60 +1353,124 @@ function buildArm(unit, mats){
 
 (function buildCar(){
   var body    = new THREE.Group();          // 车辆根节点（作 FPV 相机的锚点）
-  var chassis = new THREE.Group();          // 第一视角下隐藏的部分
-  var armsGrp = new THREE.Group();          // 第一视角下保留可见的部分
+  var chassis = new THREE.Group();          // 第一视角下隐藏的部分（车身/车轮/驾驶台）
+  var armsGrp = new THREE.Group();          // 第一视角下保留可见的部分（立柱 + 机械臂）
   var mats = {
     body:  new THREE.MeshStandardMaterial({ color:0x2f6f9e, roughness:0.45, metalness:0.6 }),
     dark:  new THREE.MeshStandardMaterial({ color:0x16212c, roughness:0.85, metalness:0.3 }),
+    frame: new THREE.MeshStandardMaterial({ color:0x3c4a58, roughness:0.55, metalness:0.75 }),
     arm:   new THREE.MeshStandardMaterial({ color:0xd8a13a, roughness:0.40, metalness:0.78 }),
+    deck:  new THREE.MeshStandardMaterial({ color:0x27313d, roughness:0.90, metalness:0.25 }),
     array: new THREE.MeshStandardMaterial({ color:0x1d6fa8, roughness:0.30, metalness:0.70,
              emissive: new THREE.Color(0x0d3a57), emissiveIntensity:0.7 }),
     ant:   new THREE.MeshStandardMaterial({ color:0x123a55, roughness:0.35, metalness:0.55,
              emissive: new THREE.Color(0x1b6d8f), emissiveIntensity:0.9 })
   };
 
-  // ---------------------------------------------------------- 底盘与车轮
-  var chassisMesh = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.34, 0.72), mats.body);
-  chassisMesh.position.y = -0.95;
-  chassis.add(chassisMesh);
+  var W = 1.30, deckY = carCfg.deckY;
+  var zc = (carCfg.deckZ0 + carCfg.deckZ1) / 2;
+  var zl = carCfg.deckZ1 - carCfg.deckZ0;
+  var roadY = -(PT.Ri - 0.30);             // 道床面高度（轮子落在此面上）
+  var wheelR = 0.16;
+  var axleY = roadY + wheelR;              // 轮心高度
+  var rearAxleZ = carCfg.deckZ0 + 0.55;
+  var frontAxleZ = carCfg.deckZ1 - 0.45;
 
-  var top = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.16, 0.62), mats.dark);
-  top.position.y = -0.72;
-  chassis.add(top);
-
-  for (var i = 0; i < 2; i++){
-    for (var j = 0; j < 2; j++){
-      var w = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.10, 14), mats.dark);
-      w.rotation.x = Math.PI / 2;
-      w.position.set(-0.42 + i * 0.84, -1.10, -0.40 + j * 0.80);
-      chassis.add(w);
-    }
-  }
-
-  // 机械臂底座平台（置于 armsGrp 内，保证第一视角可见）
-  var basePlate = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.10, 0.66), mats.dark);
-  basePlate.position.set(0, -0.66, -0.46);
-  armsGrp.add(basePlate);
-
-  // 驾驶室台面 + 车载显示终端
-  var deck = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.05, 0.56), mats.dark);
-  deck.position.set(0.06, -0.20, -0.36);
+  // ---------------------------------------------------------- 平板车车架
+  // 主底板
+  var deck = new THREE.Mesh(new THREE.BoxGeometry(W, 0.10, zl), mats.deck);
+  deck.position.set(0, deckY, zc);
   chassis.add(deck);
+  // 车架纵梁（位于底板正下方，与底板贴合）
+  var railY = deckY - 0.13;
+  for (var s = -1; s <= 1; s += 2){
+    var beam = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.16, zl), mats.frame);
+    beam.position.set(s * 0.50, railY, zc);
+    chassis.add(beam);
+  }
+  // 横向加强肋
+  for (var r = 0; r < 3; r++){
+    var rib = new THREE.Mesh(new THREE.BoxGeometry(W + 0.04, 0.07, 0.10), mats.frame);
+    rib.position.set(0, railY, carCfg.deckZ0 + 0.35 + r * 0.78);
+    chassis.add(rib);
+  }
+  // 尾部配重箱 + 前端防撞梁
+  var counter = new THREE.Mesh(new THREE.BoxGeometry(W - 0.10, 0.40, 0.34), mats.body);
+  counter.position.set(0, deckY + 0.20, carCfg.deckZ0 + 0.22);
+  chassis.add(counter);
+  var bumper = new THREE.Mesh(new THREE.BoxGeometry(W, 0.13, 0.12), mats.frame);
+  bumper.position.set(0, deckY, carCfg.deckZ1 + 0.06);
+  chassis.add(bumper);
 
-  var console = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.32, 0.06),
+  // ---------------------------------------------------------- 车轮（轮轴 + 支柱与车架相连）
+  [rearAxleZ, frontAxleZ].forEach(function(wz, wi){
+    var axle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, W + 0.08, 10), mats.frame);
+    axle.rotation.z = Math.PI / 2;
+    axle.position.set(0, axleY, wz);
+    chassis.add(axle);
+    for (var sd = -1; sd <= 1; sd += 2){
+      var wheel = new THREE.Mesh(new THREE.CylinderGeometry(wheelR, wheelR, 0.12, 16), mats.dark);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(sd * (W / 2 - 0.04), axleY, wz);
+      chassis.add(wheel);
+      // 轮罩支柱：自轮心向上连到纵梁底面，消除车轮悬空
+      var strutGap = (railY - 0.08) - axleY;
+      var strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, strutGap + 0.04, 0.10), mats.frame);
+      strut.position.set(sd * (W / 2 - 0.04), axleY + strutGap / 2, wz);
+      chassis.add(strut);
+      // 轮轴支座（连接车轮与纵梁）
+      var bracket = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.09, 0.34), mats.frame);
+      bracket.position.set(sd * 0.50, railY - 0.10, wz);
+      chassis.add(bracket);
+    }
+  });
+
+  // ---------------------------------------------------------- 驾驶台（相机后方）
+  var seatBack = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.44, 0.09), mats.dark);
+  seatBack.position.set(0.30, deckY + 0.62, carCfg.deckZ0 + 0.72);
+  chassis.add(seatBack);
+  var seatPad = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.09, 0.42), mats.dark);
+  seatPad.position.set(0.30, deckY + 0.44, carCfg.deckZ0 + 0.95);
+  chassis.add(seatPad);
+  var console = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.30, 0.07),
     new THREE.MeshStandardMaterial({ color:0x0d2233, roughness:0.35, metalness:0.5,
       emissive: new THREE.Color(0x0a4a6e), emissiveIntensity:0.8 }));
-  console.position.set(0.06, -0.02, -0.62);
-  console.rotation.x = -0.34;
+  console.position.set(0.30, deckY + 0.62, carCfg.deckZ0 + 1.34);
+  console.rotation.x = -0.32;
   chassis.add(console);
-
-  var scr = new THREE.Mesh(new THREE.PlaneGeometry(0.40, 0.25),
+  var scr = new THREE.Mesh(new THREE.PlaneGeometry(0.40, 0.24),
     new THREE.MeshBasicMaterial({ color:0x6fe8ff, transparent:true, opacity:0.92 }));
-  scr.position.set(0.06, -0.015, -0.588);
-  scr.rotation.x = -0.34;
+  scr.position.set(0.30, deckY + 0.63, carCfg.deckZ0 + 1.30);
+  scr.rotation.x = -0.32;
   chassis.add(scr);
 
-  // ---------------------------------------------------------- 3 台机械臂
+  // ---------------------------------------------------------- 立柱（肩关节的安装基础）
+  // 三根立柱自底板竖直立在 z = mastZ，柱顶 = 肩关节位置。
+  // 立柱属 armsGrp（第一视角保留），使"臂—柱—车"在第一视角下依然连续可辨。
+  var mastH = carCfg.shoulderY - (deckY + 0.05);
+  carCfg.units.forEach(function(u){
+    var mast = new THREE.Mesh(new THREE.BoxGeometry(0.14, mastH, 0.14), mats.frame);
+    mast.position.set(u.offX, deckY + 0.05 + mastH / 2, carCfg.mastZ);
+    armsGrp.add(mast);
+    // 柱脚法兰
+    var flange = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.26), mats.dark);
+    flange.position.set(u.offX, deckY + 0.07, carCfg.mastZ);
+    armsGrp.add(flange);
+    // 斜撑：自柱脚连到底板尾部，形成三角稳定结构
+    var br = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.80), mats.frame);
+    br.position.set(u.offX, deckY + 0.36, carCfg.mastZ - 0.40);
+    br.rotation.x = -0.52;
+    armsGrp.add(br);
+  });
+  // 柱间横梁（三柱连成门架）
+  var crossBar = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.09, 0.11), mats.frame);
+  crossBar.position.set(0, carCfg.shoulderY - 0.30, carCfg.mastZ);
+  armsGrp.add(crossBar);
+  var crossBar2 = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.08, 0.10), mats.frame);
+  crossBar2.position.set(0, deckY + 0.42, carCfg.mastZ);
+  armsGrp.add(crossBar2);
+
+  // ---------------------------------------------------------- 3 台机械臂（装在柱顶）
   carArmUnits = carCfg.units.map(function(u){
     var arm = buildArm(u, mats);
     armsGrp.add(arm);
@@ -2344,7 +2419,7 @@ function flyUpdate(dt){
 var _carDir = new THREE.Vector3(), _carUp = new THREE.Vector3();
 var _fpTarget = new THREE.Vector3(), _fpEye = new THREE.Vector3();
 
-function fpCamera(){
+function fpCamera(tp){
   var car = gCar.userData.car;
   if (!car) return;
   // 相机位置：车体局部坐标 → 世界坐标（含世界组变换）
@@ -2353,7 +2428,7 @@ function fpCamera(){
   camera.position.copy(_fpEye);
 
   // 观察方向：车头朝向 + 扫掠偏摆 + 俯仰
-  var sweepAng = fp.sweep ? 0.55 * Math.sin(clock.elapsedTime * 0.9) : 0;
+  var sweepAng = fp.sweep ? 0.55 * Math.sin(tp * 0.9) : 0;
   var ang = Math.PI / 2 + fp.yaw + sweepAng;       // 绕 Y 的绝对方位
   var ch = Math.cos(fp.pitch), sh = Math.sin(fp.pitch);
   _carDir.set(Math.sin(ang) * ch, sh, Math.cos(ang) * ch).normalize();
@@ -2362,7 +2437,7 @@ function fpCamera(){
   _carUp.set(0, 1, 0);
   camera.up.set(0, 1, 0);
   camera.lookAt(_fpTarget);
-  camera.rotateZ(Math.sin(clock.elapsedTime * 0.7) * 0.010);
+  camera.rotateZ(Math.sin(tp * 0.7) * 0.010);
 }
 
 // ---------------------------------------------------------------- B-scan 实时剖面
@@ -2380,7 +2455,7 @@ var bscanDirty = true;
 function scanRow(dt){ return BH * (0.28 + 0.62 * clamp(dt / 30, 0, 1)); }
 function bscanInit(){ bscanDirty = true; }
 
-function bscanDraw(carX){
+function bscanDraw(carX, tp){
   var img = bscanCtx.createImageData(BW, BH);
   var px = img.data;
   // 预计算各行的高斯分量，避免逐像素重复指数运算
@@ -2516,6 +2591,47 @@ document.getElementById('btnAlarm').onclick = function(){
 
 document.getElementById('btnReport').onclick = function(){ exportReport(); };
 
+// -------------------------------------------------------- 暂停 / 继续检测作业
+var btnPause = document.getElementById('btnPause');
+var btnPause2 = document.getElementById('btnPause2');
+function setPaused(v){
+  carPaused = !!v;
+  // 顶栏按钮
+  if (btnPause){
+    btnPause.classList.toggle('on', carPaused);
+    btnPause.textContent = carPaused ? '▶ 继续检测（P）' : '⏸ 暂停检测（P）';
+  }
+  // 左侧栏按钮
+  if (btnPause2) btnPause2.textContent = carPaused ? '▶ 继续检测（P）' : '⏸ 暂停 / 继续检测（P）';
+  // 第一视角 HUD 的 REC 指示：暂停时转为黄色「暂停」
+  var rec = document.querySelector('#carHud .ch-rec');
+  if (rec){
+    var dot = rec.querySelector('i');
+    var txt = rec.querySelector('.rec-txt');
+    if (dot){
+      dot.style.background = carPaused ? '#ffd633' : '#ff3b3b';
+      dot.style.boxShadow  = '0 0 8px ' + (carPaused ? '#ffd633' : '#ff3b3b');
+      dot.style.animation  = carPaused ? 'none' : '';
+      dot.style.opacity    = carPaused ? '0.6' : '1';
+    }
+    if (txt){
+      txt.textContent = carPaused ? '暂停' : 'REC';
+      txt.style.color = carPaused ? '#ffd633' : '#ff5b5b';
+    }
+  }
+  // 暂停时不刷新 B-scan；继续时标记重绘
+  if (!carPaused) bscanDirty = true;
+}
+function togglePause(){
+  setPaused(!carPaused);
+}
+if (btnPause)  btnPause.onclick  = togglePause;
+if (btnPause2) btnPause2.onclick = togglePause;
+// 键盘 P 暂停 / 继续
+window.addEventListener('keydown', function(e){
+  if (e.key === 'p' || e.key === 'P'){ togglePause(); }
+});
+
 function exportReport(){
   var lv = shiLevel(SHI);
   var counts = {};
@@ -2577,6 +2693,12 @@ function exportReport(){
 var clock = new THREE.Clock();
 var tmpV = new THREE.Vector3();
 
+// 检测作业状态：可在任意时刻暂停 / 继续
+// carPaused 冻结"作业时钟" inspT —— 车辆行进、机械臂扫查、天线脉冲、
+// B-scan 扫描线、过环提示全部停住；相机等观察类交互不受影响。
+var carPaused = false;
+var inspT = 0;
+
 function updateLabels(){
   // 第一视角下车内/身后病害的投影会失真，直接关闭标注层
   if (fp.on){
@@ -2613,6 +2735,11 @@ function frame(){
   requestAnimationFrame(frame);
   var dt = Math.min(clock.getDelta(), 0.05);
   var t = clock.elapsedTime;
+  // 检测作业时钟：暂停时冻结，用于驱动车辆行进、机械臂扫查、天线脉冲、
+  // B-scan 扫描线与过环提示，使"暂停"表现为作业整体停住。
+  // 相机补间、轨道控制、自由飞行等观察类交互不受暂停影响。
+  if (!carPaused) inspT += dt;
+  var tp = inspT;
 
   // 相机补间
   if (camTween){
@@ -2671,31 +2798,32 @@ function frame(){
   }
 
   // 多机械臂扫查动画：绕肩关节抬升摆动 + 肘部随动 + 天线阵脉冲与衬砌光斑
+  // 注：使用作业时钟 tp（可暂停），而非渲染时钟 t
   for (var ai = 0; ai < carArmUnits.length; ai++){
     var A = carArmUnits[ai], cfg = A.userData.cfg;
     // baseAng 为抬升基准角（负值上抬），叠加扫查摆动
-    var ang = cfg.baseAng + carCfg.sweep * Math.sin(t * carCfg.rate + cfg.phase);
+    var ang = cfg.baseAng + carCfg.sweep * Math.sin(tp * carCfg.rate + cfg.phase);
     A.rotation.x = ang;
     // 肘部随动：以各臂自身肘角为中心小幅摆动
-    A.userData.elbow.rotation.x = cfg.elbow + 0.12 * Math.cos(t * carCfg.rate + cfg.phase);
+    A.userData.elbow.rotation.x = cfg.elbow + 0.12 * Math.cos(tp * carCfg.rate + cfg.phase);
     // 天线阵脉冲环
     var pr = A.userData.ring;
     if (pr){
-      var ph2 = (t * 2.6 + cfg.phase * 0.3) % 1;
+      var ph2 = (tp * 2.6 + cfg.phase * 0.3) % 1;
       pr.scale.setScalar(0.55 + ph2 * 2.2);
       pr.material.opacity = (1 - ph2) * 0.8;
     }
     // 打在衬砌上的扫查光斑（呼吸）
     var sp = A.userData.spot;
     if (sp){
-      sp.material.opacity = 0.18 + 0.16 * (1 + Math.sin(t * 2.6 + cfg.phase)) / 2;
-      var sr = 0.9 + 0.12 * Math.sin(t * 2.6 + cfg.phase);
+      sp.material.opacity = 0.18 + 0.16 * (1 + Math.sin(tp * 2.6 + cfg.phase)) / 2;
+      var sr = 0.9 + 0.12 * Math.sin(tp * 2.6 + cfg.phase);
       sp.scale.setScalar(sr);
     }
   }
   // 臂端工作灯随中臂摆动
   if (gCar.userData.arms && gCar.userData.arms.userData.workLight){
-    gCar.userData.arms.userData.workLight.intensity = 1.3 + 0.5 * Math.sin(t * 2.6);
+    gCar.userData.arms.userData.workLight.intensity = 1.3 + 0.5 * Math.sin(tp * 2.6);
   }
 
   // 检测车行进：第一视角按作业速度匀速遍历，普视模式按时间巡游
@@ -2703,20 +2831,20 @@ function frame(){
   if (car && gCar.visible){
     var span = X_END - PT.x0;
     if (fp.on){
-      car.position.x += fp.speed * dt;
+      if (!carPaused) car.position.x += fp.speed * dt;      // 暂停时车停住
       if (car.position.x > X_END){ car.position.x = PT.x0 + 0.5; bscanInit(); }
       fp.dist = car.position.x - PT.x0;
-      bscanDraw(car.position.x);
+      bscanDraw(car.position.x, tp);
       hudUpdate(car.position.x);
-      fpCamera();
+      fpCamera(tp);
     } else {
-      var cx = PT.x0 + 0.5 + ((t * 1.6) % span);
+      var cx = PT.x0 + 0.5 + ((tp * 1.6) % span);           // 巡游同样受暂停控制
       car.position.x = cx;
       if (bscanDirty) bscanDirty = false;      // 普视模式下不重绘剖面
     }
     var pl = car.userData.pulse;
     if (pl){
-      var ph = (t * (fp.on ? 4.0 : 1.4)) % 1;
+      var ph = (tp * (fp.on ? 4.0 : 1.4)) % 1;
       pl.scale.setScalar(0.6 + ph * (fp.on ? 5.0 : 3.4));
       pl.material.opacity = (1 - ph) * 0.55;
     }
