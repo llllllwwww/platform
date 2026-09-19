@@ -403,6 +403,7 @@
       <label class="tg"><input type="checkbox" id="ckRay"><span class="sw"></span>GPR 电磁波射线</label>
       <label class="tg"><input type="checkbox" id="ckStars" checked><span class="sw"></span>星空背景</label>
       <label class="tg"><input type="checkbox" id="ckCity" checked><span class="sw"></span>城市天际线</label>
+      <label class="tg"><input type="checkbox" id="ckProfile"><span class="sw"></span>断面偏差可视化（实测断面）</label>
     </div>
     <div class="slice-row">
       <span>纵剖切面</span>
@@ -504,6 +505,11 @@
     <div class="ch-cell"><div class="k">已扫里程</div><div class="v" id="chScan">0.0 m</div></div>
     <div class="ch-cell"><div class="k">机械臂</div><div class="v" id="chArm">3 臂扫查</div></div>
     <div class="ch-cell"><div class="k">主频 / 时窗</div><div class="v">400MHz / 30ns</div></div>
+  </div>
+  <div class="ch-grid" style="margin-top:6px">
+    <div class="ch-cell"><div class="k">当前环椭圆度</div><div class="v" id="chOval">—</div></div>
+    <div class="ch-cell"><div class="k">本环环缝错台</div><div class="v" id="chJoint">—</div></div>
+    <div class="ch-cell" style="grid-column:span 3"><div class="k">臂端贴壁靶面半径 / 断面状态</div><div class="v" id="chProf">—</div></div>
   </div>
   <div class="ch-alert quiet" id="chAlert">本段未发现异常回波</div>
 </div>
@@ -1247,7 +1253,9 @@ function layerRadius(d){
 //   arms    —— 3 台机械臂 GPR 天线阵：第一视角下**保留可见**，
 //              使"机械臂贴壁扫查衬砌"这一动作在车载视点中直接可见
 var carArmUnits = [];            // 各机械臂的可动部件，供逐帧动画驱动
-var carArmIK = [];               // 各臂的逆向运动学解序列（沿衬砌内弧逐点求解）
+var carArmIK = [];               // 各臂的名义圆形解序列（校验 / 初始姿态）
+var carArmTip = [];              // 各臂的弧长位置表（动画用）
+var carArmTipR = [0, 0, 0];      // 各臂臂端的**平滑后靶面半径**（跟踪实测断面）
 // 机械臂布置
 // 车体局部 +Z 为行进方向；大臂沿 +Z 建模，靠 rotation.x 抬升。
 // 绕 X 旋转 α 时 (0,0,L) → (0, −L·sinα, L·cosα)，故 **α 取负值 = 臂上抬**。
@@ -1270,12 +1278,14 @@ var carCfg = {
   // 每臂：横向偏移 / 臂长(大臂+小臂) / 扫掠方位角区间 / 初始相位
   // 臂长按"肩关节到衬砌内弧的最远距离"反算，保证全程可贴壁
   units: [
-    { offX:  0.44, len: 2.66, az0: 38, az1: 66, phase: 0.00, name:'左臂' },
-    { offX:  0.00, len: 2.66, az0:  0, az1: 30, phase: 0.50, name:'中臂' },
-    { offX: -0.44, len: 2.66, az0:  0, az1: 28, phase: 0.25, name:'右臂' }
+    { offX:  0.44, len: 2.75, az0: 38, az1: 66, phase: 0.00, name:'左臂' },
+    { offX:  0.00, len: 2.75, az0:  0, az1: 30, phase: 0.50, name:'中臂' },
+    { offX: -0.44, len: 2.75, az0:  0, az1: 28, phase: 0.25, name:'右臂' }
   ],
   contactGap: 0.06,              // 天线阵距衬砌内表面的贴合间隙 (m)
-  scanRate: 1.0                  // 沿弧扫掠一个来回的频率 (Hz)
+  scanRate: 1.0,                 // 沿弧扫掠一个来回的频率 (Hz)
+  scanLead: 0.35,                // 臂端相对车体的前置距离 (m)，使"过环缝"过程可见
+  trackRate: 6.0                 // 靶面半径跟踪速率 (1/s)，控制过环缝时的跟随快慢
 };
 
 // ---------------------------------------------------------------- 逆向运动学
@@ -1299,9 +1309,11 @@ function solveArmIK(ty, tz, L1, L2, shY, shZ){
 }
 
 // 沿衬砌内弧生成一条解的序列（az0 → az1 往返扫描）
+// 说明：本函数保留用于校验与初始姿态；实际动画改为 buildArmTip + 逐帧解算，
+//       因为内弧半径随环号变化（见 TunnelProfile）。
 function buildArmIK(unit){
   var L = unit.len, L1 = L * 0.54, L2 = L * 0.46;
-  var r = PT.Ri - carCfg.contactGap;        // 天线阵中心到隧道轴线的距离
+  var r = PT.Ri - carCfg.contactGap;        // 名义（理想圆形）靶面半径
   var N = 48, seq = [];
   for (var i = 0; i <= N; i++){
     var az = (unit.az0 + (unit.az1 - unit.az0) * i / N) * Math.PI / 180;
@@ -1314,6 +1326,129 @@ function buildArmIK(unit){
                err: Math.sqrt((wy-ty)*(wy-ty) + (wz-tz)*(wz-tz)) });
   }
   return seq;
+}
+
+// ==================================================================== 隧道断面实测模型
+// 目的：把"理想圆形断面"换成**随环号变化的实测断面**，使机械臂的贴壁靶面
+//       带上真实盾构隧道才有的两类几何偏差：
+//         ① 椭圆度（ovality）——同一环内半径随环向角变化，拱顶/仰拱略压扁、两侧略外扩
+//         ② 环缝错台（joint offset）——相邻环在环缝处的径向突变
+// 半径按环号 × 环向角预计算成查表（LUT），运行时只做二维线性插值，开销可忽略。
+// 注：衬砌"几何显示"仍按名义圆形绘制（设计断面），实测偏差只作用于机械臂的
+//     贴壁靶面。这样断面偏差对作业的影响可以被独立演示，不会与病害可视化相互干扰。
+var TunnelProfile = (function(){
+  var AZ_BUCKETS = 48;                 // 每 3.75° 一档
+  var rings = [];                      // [{ring, oval, jointAmp, jointAz, jointSig}]
+  var LUT = null;                      // Float32Array(nRing * AZ_BUCKETS)
+  var EPS = carCfg.contactGap;         // 天线阵距内表面的贴合间隙
+  var rMaxSeen = 0;
+
+  // 确定性伪随机（同一环号每次刷新得到相同断面，演示可复现）
+  function prand(i){
+    var x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  function smoothstep(t){ t = clamp(t, 0, 1); return t * t * (3 - 2 * t); }
+
+  function build(){
+    rings = [];
+    var r0 = PT.ring0, n = PT.nRing;
+    for (var k = 0; k < n; k++){
+      var rn = r0 + k;
+      // ① 椭圆度：±14 mm 量级的竖向压扁
+      var oval = (prand(rn * 1.7) - 0.5) * 2 * 0.014;
+      // ② 环缝错台：每环在其起端环缝处有 0~38 mm 的径向突变，
+      //    沿里程用 smoothstep 在 ±0.30 m 内过渡，避免臂端瞬间跳变
+      var amp = prand(rn * 3.1 + 17) * 0.038;
+      var azc = (prand(rn * 5.3 + 91) - 0.5) * 2 * 150;   // 错台集中的环向位置
+      var sig = 0.42 + prand(rn * 7.9 + 5) * 0.26;        // 环向影响宽度 (rad)
+      rings.push({ ring:rn, oval:oval, jointAmp:amp, jointAz:azc, jointSig:sig });
+    }
+    // 预计算半径表
+    LUT = new Float32Array(n * AZ_BUCKETS);
+    rMaxSeen = 0;
+    for (var k2 = 0; k2 < n; k2++){
+      var pr = rings[k2];
+      for (var b = 0; b < AZ_BUCKETS; b++){
+        var azDeg = b * 360 / AZ_BUCKETS;
+        var az = azDeg * Math.PI / 180;
+        // 椭圆度：拱顶(0°)/仰拱(180°) 略压扁 -> 该处半径变小
+        var dOval = -pr.oval * Math.cos(2 * az);
+        // 环缝错台：高斯型径向凸起，集中在 jointAz 附近
+        var d = (azDeg - pr.jointAz) * Math.PI / 180;
+        var dJoint = pr.jointAmp * Math.exp(-(d * d) / (2 * pr.jointSig * pr.jointSig));
+        var r = PT.Ri + dOval + dJoint - EPS;              // 天线阵中心所处半径
+        if (r > rMaxSeen) rMaxSeen = r;
+        LUT[k2 * AZ_BUCKETS + b] = r;
+      }
+    }
+    return rings;
+  }
+
+  // 查表：环号(可为小数，按里程连续) + 环向角(度) -> 靶面半径
+  function radiusAt(ringFloat, azDeg){
+    if (!LUT) return PT.Ri - EPS;
+    var a = azDeg / 360 * AZ_BUCKETS;
+    var a0 = Math.floor(a) % AZ_BUCKETS, a1 = (a0 + 1) % AZ_BUCKETS, ka = a - Math.floor(a);
+    var k = clamp(ringFloat - PT.ring0, 0, PT.nRing - 1.0001);
+    var k0 = Math.floor(k), k1 = Math.min(k0 + 1, PT.nRing - 1), kk = k - k0;
+    var v00 = LUT[k0 * AZ_BUCKETS + a0], v01 = LUT[k0 * AZ_BUCKETS + a1];
+    var v10 = LUT[k1 * AZ_BUCKETS + a0], v11 = LUT[k1 * AZ_BUCKETS + a1];
+    return (v00 * (1 - ka) + v01 * ka) * (1 - kk) + (v10 * (1 - ka) + v11 * ka) * kk;
+  }
+
+  // 半径沿里程的变化率（用于识别"正在过环缝"）
+  function stepAt(ringFloat, azDeg){
+    var r1 = radiusAt(ringFloat + 0.25, azDeg);
+    var r0 = radiusAt(ringFloat - 0.25, azDeg);
+    return r1 - r0;
+  }
+
+  function ringDataAt(ringFloat){
+    var k = clamp(Math.round(ringFloat - PT.ring0), 0, PT.nRing - 1);
+    return rings[k];
+  }
+  function ringIdxAt(ringFloat){
+    return clamp(Math.round(ringFloat - PT.ring0), 0, PT.nRing - 1);
+  }
+
+  return {
+    build: build,
+    radiusAt: radiusAt,
+    stepAt: stepAt,
+    ringDataAt: ringDataAt,
+    ringIdxAt: ringIdxAt,
+    buckets: AZ_BUCKETS,
+    maxRadius: function(){ return rMaxSeen; },
+    rings: function(){ return rings; }
+  };
+})();
+
+// ---------------------------------------------------------------- 臂端沿弧位置
+// 每条臂生成按弧长积分的等步距位置表（弧长/方位角），使臂端沿断面的线速度
+// 均匀（理想圆上 az 与弧长成正比，实测断面下略有差异，用弦长积分修正）。
+function buildArmTip(unit){
+  var seq0 = buildArmIK(unit);            // 名义圆形下的解，仅用于取 az 序列
+  var xs = [0], azs = [seq0[0].az], L = 0;
+  for (var i = 1; i < seq0.length; i++){
+    var r0 = TunnelProfile.radiusAt(PT.ring0, seq0[i-1].az * 180 / Math.PI);
+    var r1 = TunnelProfile.radiusAt(PT.ring0, seq0[i].az * 180 / Math.PI);
+    var y0 = r0 * Math.cos(seq0[i-1].az), z0 = r0 * Math.sin(seq0[i-1].az);
+    var y1 = r1 * Math.cos(seq0[i].az),   z1 = r1 * Math.sin(seq0[i].az);
+    L += Math.sqrt((y1-y0)*(y1-y0) + (z1-z0)*(z1-z0));
+    xs.push(L); azs.push(seq0[i].az);
+  }
+  return { xs: xs, azs: azs, length: L, n: seq0.length };
+}
+
+// 臂端轨迹位置映射：u∈[0,1] 经三角波往返后，按弧长插值方位角
+function tipAzAt(unit, tip, u){
+  var s = u * tip.length;
+  var i = 0;
+  while (i < tip.xs.length - 2 && tip.xs[i + 1] < s) i++;
+  var span = tip.xs[i + 1] - tip.xs[i];
+  var k = span > 1e-9 ? (s - tip.xs[i]) / span : 0;
+  return tip.azs[i] + (tip.azs[i + 1] - tip.azs[i]) * k;
 }
 
 function buildArm(unit, mats){
@@ -1515,13 +1650,18 @@ function buildArm(unit, mats){
   armsGrp.add(crossBar2);
 
   // ---------------------------------------------------------- 3 台机械臂（装在柱顶）
-  carArmIK = [];
+  carArmIK = []; carArmTip = [];
+  // 断面实测模型先行构建：buildArmTip 依赖其半径表做弧长积分
+  TunnelProfile.build();
   carArmUnits = carCfg.units.map(function(u){
-    carArmIK.push(buildArmIK(u));      // 先解算该臂沿衬砌内弧的运动序列
+    carArmIK.push(buildArmIK(u));        // 名义圆形解（校验用）
+    carArmTip.push(buildArmTip(u));      // 弧长位置表（动画用）
     var arm = buildArm(u, mats);
     armsGrp.add(arm);
     return arm;
   });
+  // 臂端靶面半径初值取名义靶面，避免首帧从 0 收敛
+  for (var ti = 0; ti < carArmTipR.length; ti++) carArmTipR[ti] = PT.Ri - carCfg.contactGap;
 
   // 臂端照明点光源（跟随中臂腕部，营造"工作灯"效果）
   var workLight = new THREE.PointLight(0x5fe8ff, 1.6, 4.5, 2);
@@ -1539,6 +1679,43 @@ function buildArm(unit, mats){
   body.userData.pulse   = carArmUnits[1].userData.ring;   // 兼容原有脉冲逻辑
   gCar.add(body);
   gCar.userData.car = body;
+})();
+
+// ==================================================================== 断面偏差可视化
+// 在名义圆形内表面之外，叠加一层"实测断面"线框：
+//   逐环按 TunnelProfile 的半径表生成一圈闭合折线，颜色按径向偏差映射
+//   （暖色=凸出/错台，冷色=压扁），可直观看出椭圆度与环缝错台。
+var gProfile = group('profile');
+gProfile.visible = false;
+(function buildProfileViz(){
+  if (!TunnelProfile.rings().length) return;
+  var rNom = PT.Ri;
+  var B = TunnelProfile.buckets;
+  TunnelProfile.rings().forEach(function(pr, k){
+    var cx = PT.x0 + (k + 0.5) * PT.segLen;
+    var pts = [], cols = [];
+    for (var b = 0; b <= B; b++){
+      var azDeg = (b % B) * 360 / B;
+      var az = azDeg * Math.PI / 180;
+      var r = TunnelProfile.radiusAt(pr.ring, azDeg) + carCfg.contactGap;  // 还原到内表面
+      pts.push(new THREE.Vector3(cx, r * Math.cos(az), r * Math.sin(az)));
+    }
+    var geo = new THREE.BufferGeometry().setFromPoints(pts);
+    // 顶点着色：偏差越大越暖
+    var colArr = [];
+    for (var b2 = 0; b2 < pts.length; b2++){
+      var dev = pts[b2].length() - rNom;                 // 相对名义半径的偏差
+      var t = clamp((dev + 0.02) / 0.05, 0, 1);          // -20mm~+30mm 映射到 0~1
+      var c = new THREE.Color();
+      c.setHSL(0.58 - 0.58 * t, 0.95, 0.35 + 0.25 * t);  // 冷蓝 -> 暖红
+      colArr.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colArr, 3));
+    var line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.95
+    }));
+    gProfile.add(line);
+  });
 })();
 
 // ==================================================================== 电磁波射线
@@ -2218,6 +2395,7 @@ bind('ckLabel',  function(v){
 bind('ckLabelAll', function(){ /* 由 updateLabels 每帧读取，无需额外处理 */ });
 bind('ckCar',    function(v){ gCar.visible = v; });
 bind('ckRay',    function(v){ gRay.visible = v; });
+bind('ckProfile',function(v){ gProfile.visible = v; });
 bind('ckStars',  function(v){ if (bgStars) bgStars.visible = v; });
 bind('ckCity',   function(v){ bgCity.visible = v; });
 
@@ -2583,6 +2761,26 @@ function hudUpdate(carX){
   var armEl = document.getElementById('chArm');
   if (armEl) armEl.textContent = carArmUnits.length + ' 臂扫查';
 
+  // 断面实测信息：当前环的椭圆度、环缝错台，以及臂端实际贴壁靶面半径
+  if (TunnelProfile.rings().length){
+    var ringF = PT.ring0 + (carX - PT.x0 + carCfg.scanLead) / PT.segLen;
+    var pr = TunnelProfile.ringDataAt(ringF);
+    var ovEl = document.getElementById('chOval');
+    var jtEl = document.getElementById('chJoint');
+    var pfEl = document.getElementById('chProf');
+    if (ovEl) ovEl.textContent = (pr.oval >= 0 ? '+' : '') + fmt(pr.oval * 1000, 1) + ' mm';
+    if (jtEl) jtEl.textContent = fmt(pr.jointAmp * 1000, 0) + ' mm';
+    if (pfEl){
+      var azNow = (carArmUnits[1] && carArmUnits[1].userData.azNow) || 0;
+      var rNow = TunnelProfile.radiusAt(ringF, azNow * 180 / Math.PI);
+      var dR = TunnelProfile.stepAt(ringF, azNow * 180 / Math.PI);
+      var st = Math.abs(dR) > 0.012 ? '① 正在过环缝' :
+               (Math.abs(pr.oval) > 0.010 ? '② 椭圆度影响中' : '③ 断面平稳');
+      pfEl.textContent = fmt(rNow, 3) + ' m　' + st;
+      pfEl.style.color = Math.abs(dR) > 0.012 ? '#ffd633' : '#eaf6ff';
+    }
+  }
+
   // 过环闪烁
   if (ringNo !== fp.lastRing){
     fp.lastRing = ringNo;
@@ -2843,23 +3041,32 @@ function frame(){
     bk.mesh.material.opacity = 0.12 + 0.88 * bs * bs * bs;
   }
 
-  // 多机械臂贴壁扫掠动画
-  // 关节角不靠正弦摆动，而是**查 IK 序列**：天线阵沿衬砌内弧往返移动，
-  // 三角波位置 u ∈ [0,1] → 序列索引 → 该点的肩角/肘角。
-  // 注：使用作业时钟 tp（可暂停），而非渲染时钟 t
+  // 多机械臂贴壁扫掠动画（实测断面版）
+  // 关节角逐帧由 IK 解算，靶面半径取自 TunnelProfile —— 随**环号**与**环向角**
+  // 变化，因此臂端会跟着椭圆度起伏、并在过环缝时被错台"顶起"或"让开"。
+  // 半径经一阶低通滤波跟踪，避免环缝处关节角瞬变，同时保留真实的阶梯跟随感。
+  var carXNow = car ? car.position.x : PT.x0;
   for (var ai = 0; ai < carArmUnits.length; ai++){
-    var A = carArmUnits[ai], cfg = A.userData.cfg;
-    var seq = carArmIK[ai];
-    if (seq && seq.length){
-      // 三角波：0→1→0 往返，保证端点不跳变
+    var A = carArmUnits[ai], cfg = A.userData.cfg, tip = carArmTip[ai];
+    if (tip){
+      // 三角波：0→1→0 往返，端点不跳变
       var u = (tp * carCfg.scanRate + cfg.phase) % 1;
       u = u < 0.5 ? u * 2 : (1 - u) * 2;
-      // 线性插值取解，弧面移动连续无抖动
-      var f = u * (seq.length - 1);
-      var i0 = Math.floor(f), i1 = Math.min(i0 + 1, seq.length - 1), k = f - i0;
-      var s0 = seq[i0], s1 = seq[i1];
-      A.rotation.x     = s0.a + (s1.a - s0.a) * k;
-      A.userData.elbow.rotation.x = s0.e + (s1.e - s0.e) * k;
+      var az = tipAzAt(cfg, tip, u);
+      // 臂端略前置于车体（扫的是即将进入的环），使"过环缝"过程可见
+      var ringNow = PT.ring0 + (carXNow - PT.x0 + carCfg.scanLead) / PT.segLen;
+      var rTarget = TunnelProfile.radiusAt(ringNow, az * 180 / Math.PI);
+      carArmTipR[ai] += (rTarget - carArmTipR[ai]) * Math.min(1, dt * carCfg.trackRate);
+      var ty = carArmTipR[ai] * Math.cos(az), tz = carArmTipR[ai] * Math.sin(az);
+      var L = cfg.len, L1 = L * 0.54, L2 = L * 0.46;
+      var s = solveArmIK(ty, tz, L1, L2, carCfg.shoulderY, carCfg.shoulderZ);
+      A.rotation.x = s.a;
+      A.userData.elbow.rotation.x = s.e;
+      // 记录臂端相对靶面的偏差（正值=尚未贴上，负值=压入衬砌）
+      var ey2 = carCfg.shoulderY - L1 * Math.sin(s.a), ez2 = carCfg.shoulderZ + L1 * Math.cos(s.a);
+      var wy2 = ey2 - L2 * Math.sin(s.a + s.e), wz2 = ez2 + L2 * Math.cos(s.a + s.e);
+      A.userData.gap = carArmTipR[ai] - Math.sqrt(wy2*wy2 + wz2*wz2);
+      A.userData.azNow = az;
     }
     // 天线阵脉冲环（收发节拍）
     var pr = A.userData.ring;
@@ -2868,11 +3075,14 @@ function frame(){
       pr.scale.setScalar(0.55 + ph2 * 2.2);
       pr.material.opacity = (1 - ph2) * 0.8;
     }
-    // 贴壁接触光斑（呼吸）
+    // 贴壁接触光斑（呼吸，过环缝时略亮以提示断面突变）
     var sp = A.userData.spot;
     if (sp){
-      sp.material.opacity = 0.20 + 0.18 * (1 + Math.sin(tp * 2.6 + cfg.phase * 6.0)) / 2;
-      sp.scale.setScalar(0.92 + 0.12 * Math.sin(tp * 2.6 + cfg.phase * 6.0));
+      var boost = Math.min(1, Math.abs(TunnelProfile.stepAt(
+        PT.ring0 + (carXNow - PT.x0 + carCfg.scanLead) / PT.segLen,
+        (A.userData.azNow || 0) * 180 / Math.PI)) / 0.03);
+      sp.material.opacity = 0.20 + 0.18 * (1 + Math.sin(tp * 2.6 + cfg.phase * 6.0)) / 2 + 0.25 * boost;
+      sp.scale.setScalar(0.92 + 0.12 * Math.sin(tp * 2.6 + cfg.phase * 6.0) + 0.20 * boost);
     }
   }
   // 臂端工作灯随扫查节拍明暗
