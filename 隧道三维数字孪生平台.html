@@ -287,7 +287,7 @@
   .ch-bar .track i{position:absolute;left:0;top:0;bottom:0;width:0%;
     background:linear-gradient(90deg,#1c8ad6,#2fd4ff);border-radius:4px;}
   .ch-bar b{color:#bfe6ff;font-weight:600;min-width:56px;text-align:right;}
-  .ch-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px;}
+  .ch-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px;}
   .ch-cell{background:rgba(255,255,255,.045);border:1px solid var(--line2);
     border-radius:6px;padding:5px 6px;}
   .ch-cell .k{font-size:9px;color:var(--txt2);}
@@ -500,6 +500,7 @@
     <div class="ch-cell"><div class="k">当前环号</div><div class="v" id="chRing">980</div></div>
     <div class="ch-cell"><div class="k">作业速度</div><div class="v" id="chSpeed">3.6 m/s</div></div>
     <div class="ch-cell"><div class="k">已扫里程</div><div class="v" id="chScan">0.0 m</div></div>
+    <div class="ch-cell"><div class="k">机械臂</div><div class="v" id="chArm">3 臂扫查</div></div>
     <div class="ch-cell"><div class="k">主频 / 时窗</div><div class="v">400MHz / 30ns</div></div>
   </div>
   <div class="ch-alert quiet" id="chAlert">本段未发现异常回波</div>
@@ -1238,87 +1239,183 @@ function layerRadius(d){
   });
 })();
 
-// ==================================================================== 检测车
+// ==================================================================== 检测车（多机械臂 GPR 检测系统）
+// 车体分两层：
+//   chassis —— 底盘/车轮/驾驶室台面/显示终端：第一视角下需隐藏（相机就在车内）
+//   arms    —— 3 台机械臂 GPR 天线阵：第一视角下**保留可见**，
+//              使"机械臂贴壁扫查衬砌"这一动作在车载视点中直接可见
+var carArmUnits = [];            // 各机械臂的可动部件，供逐帧动画驱动
+// 机械臂布置：横向偏移 / 臂长 / 抬升基准角 / 相位
+// 车体局部 +Z 为行进方向；大臂沿 +Z 建模，靠 rotation.x 抬升。
+// 绕 X 旋转 α 时 (0,0,L) → (0, −L·sinα, L·cosα)，故 **α 取负值 = 臂上抬**。
+var carCfg = {
+  // 肩关节置于相机前方偏下的"天线阵基座"上，摆幅半径小，保证第一视角内可见
+  shoulderY:  0.10,              // 肩关节高度（车体局部坐标；相机在 y=0.34，故略低于视线）
+  shoulderZ:  1.00,              // 肩关节纵向位置（相机在 z=-0.18，故位于相机前方 1.18 m）
+  // baseAng: 大臂仰角（负值=上抬）；elbow: 肘部相对角（负值=小臂继续上抬）
+  // 取值使三只臂的天线阵落在第一视角画面中部，且不被底部 HUD 遮挡
+  units: [
+    { offX:  0.42, len: 0.70, baseAng:-0.78, elbow:-0.10, phase: 0.0 },   // 左臂 → 拱顶左
+    { offX:  0.00, len: 0.70, baseAng:-0.82, elbow:-0.10, phase: 2.1 },   // 中臂 → 拱顶
+    { offX: -0.42, len: 0.70, baseAng:-0.86, elbow:-0.10, phase: 4.2 }    // 右臂 → 拱顶右
+  ],
+  sweep: 0.24,                   // 扫查摆幅 (rad)
+  rate: 1.25                     // 扫查角频率 (rad/s)
+};
+
+function buildArm(unit, mats){
+  var g = new THREE.Group();                       // 肩关节（绕局部 X 摆动）
+  g.position.set(unit.offX, carCfg.shoulderY, carCfg.shoulderZ);
+
+  // 肩部回转座
+  var hub = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.16, 0.15, 16), mats.dark);
+  hub.rotation.x = Math.PI / 2;                    // 立轴
+  g.add(hub);
+  var collar = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.07, 16), mats.arm);
+  collar.rotation.x = Math.PI / 2;
+  collar.position.z = 0.06;
+  g.add(collar);
+
+  // 大臂：沿 +Z（行进方向）建模，由 g.rotation.x 抬升
+  var L1 = unit.len * 0.58, L2 = unit.len * 0.52;
+  var upper = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.10, L1), mats.arm);
+  upper.position.z = L1 / 2;
+  g.add(upper);
+
+  // 肘关节 + 小臂
+  var elbow = new THREE.Group();
+  elbow.position.z = L1;
+  g.add(elbow);
+  var joint = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), mats.dark);
+  elbow.add(joint);
+
+  var fore = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.075, L2), mats.arm);
+  fore.position.z = L2 / 2;
+  elbow.add(fore);
+
+  // 腕部 + GPR 天线阵（含发射/接收单元）
+  var wrist = new THREE.Group();
+  wrist.position.z = L2;
+  elbow.add(wrist);
+
+  var head = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.16, 0.06), mats.array);
+  head.rotation.x = 0.18;
+  head.position.y = 0.03;
+  wrist.add(head);
+
+  var ant = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.05, 0.10), mats.ant);
+  ant.position.set(0, 0.11, 0.06);
+  ant.rotation.x = 0.18;
+  wrist.add(ant);
+
+  // 天线阵端面的雷达脉冲环（朝向衬砌）
+  var ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.030, 0.065, 22),
+    new THREE.MeshBasicMaterial({ color:0x5fe8ff, transparent:true, opacity:0.85,
+      side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false })
+  );
+  ring.position.set(0, 0.14, 0.08);
+  ring.rotation.x = -Math.PI / 2;
+  wrist.add(ring);
+
+  // 天线阵指向的光斑（打在衬砌上，直观表示"正在扫查"）
+  var spot = new THREE.Mesh(
+    new THREE.CircleGeometry(0.18, 24),
+    new THREE.MeshBasicMaterial({ color:0x7fe8ff, transparent:true, opacity:0.30,
+      side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false })
+  );
+  spot.position.set(0, 0.62, 0.06);
+  spot.rotation.x = -Math.PI / 2;
+  wrist.add(spot);
+
+  g.userData.elbow = elbow;
+  g.userData.wrist = wrist;
+  g.userData.ring  = ring;
+  g.userData.spot  = spot;
+  g.userData.cfg   = unit;
+
+  // 初始姿态：大臂沿 +Z 建模，baseAng 为抬升角（负值上抬）
+  g.rotation.x = unit.baseAng;
+  elbow.rotation.x = unit.elbow;
+  return g;
+}
+
 (function buildCar(){
-  var body = new THREE.Group();
-  var matBody = new THREE.MeshStandardMaterial({ color:0x2f6f9e, roughness:0.45, metalness:0.6 });
-  var matDark = new THREE.MeshStandardMaterial({ color:0x16212c, roughness:0.85, metalness:0.3 });
-  var matArm  = new THREE.MeshStandardMaterial({ color:0xd8a13a, roughness:0.4, metalness:0.75 });
+  var body    = new THREE.Group();          // 车辆根节点（作 FPV 相机的锚点）
+  var chassis = new THREE.Group();          // 第一视角下隐藏的部分
+  var armsGrp = new THREE.Group();          // 第一视角下保留可见的部分
+  var mats = {
+    body:  new THREE.MeshStandardMaterial({ color:0x2f6f9e, roughness:0.45, metalness:0.6 }),
+    dark:  new THREE.MeshStandardMaterial({ color:0x16212c, roughness:0.85, metalness:0.3 }),
+    arm:   new THREE.MeshStandardMaterial({ color:0xd8a13a, roughness:0.40, metalness:0.78 }),
+    array: new THREE.MeshStandardMaterial({ color:0x1d6fa8, roughness:0.30, metalness:0.70,
+             emissive: new THREE.Color(0x0d3a57), emissiveIntensity:0.7 }),
+    ant:   new THREE.MeshStandardMaterial({ color:0x123a55, roughness:0.35, metalness:0.55,
+             emissive: new THREE.Color(0x1b6d8f), emissiveIntensity:0.9 })
+  };
 
-  var chassis = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.34, 0.72), matBody);
-  chassis.position.y = -0.95;
-  body.add(chassis);
+  // ---------------------------------------------------------- 底盘与车轮
+  var chassisMesh = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.34, 0.72), mats.body);
+  chassisMesh.position.y = -0.95;
+  chassis.add(chassisMesh);
 
-  var top = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.16, 0.62), matDark);
+  var top = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.16, 0.62), mats.dark);
   top.position.y = -0.72;
-  body.add(top);
+  chassis.add(top);
 
   for (var i = 0; i < 2; i++){
     for (var j = 0; j < 2; j++){
-      var w = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.10, 14), matDark);
+      var w = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.10, 14), mats.dark);
       w.rotation.x = Math.PI / 2;
       w.position.set(-0.42 + i * 0.84, -1.10, -0.40 + j * 0.80);
-      body.add(w);
+      chassis.add(w);
     }
   }
 
-  // 机械臂
-  var base = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.17, 0.14, 16), matArm);
-  base.position.y = -0.60;
-  body.add(base);
+  // 机械臂底座平台（置于 armsGrp 内，保证第一视角可见）
+  var basePlate = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.10, 0.66), mats.dark);
+  basePlate.position.set(0, -0.66, -0.46);
+  armsGrp.add(basePlate);
 
-  var arm1 = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.80), matArm);
-  arm1.position.set(0, -0.34, 0.36);
-  arm1.rotation.x = -0.55;
-  body.add(arm1);
-
-  var arm2 = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.68), matArm);
-  arm2.position.set(0, 0.02, 0.72);
-  arm2.rotation.x = 0.62;
-  body.add(arm2);
-
-  var array = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.10, 0.34),
-    new THREE.MeshStandardMaterial({ color:0x1d6fa8, roughness:0.3, metalness:0.7,
-      emissive: new THREE.Color(0x0d3a57), emissiveIntensity:0.7 }));
-  array.position.set(0, 0.30, 0.98);
-  array.rotation.x = 0.35;
-  body.add(array);
-
-  // 雷达脉冲环
-  var pulse = new THREE.Mesh(
-    new THREE.RingGeometry(0.05, 0.10, 24),
-    new THREE.MeshBasicMaterial({ color:0x5fe8ff, transparent:true, opacity:0.9,
-      side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false })
-  );
-  pulse.position.copy(array.position);
-  pulse.rotation.x = 0.35;
-  body.add(pulse);
-
-  var pl = new THREE.PointLight(0x5fe8ff, 1.1, 3.6, 2);
-  pl.position.copy(array.position);
-  body.add(pl);
-
-  // 驾驶室台面 + 车载显示终端（供第一视角观察仪表与雷达影像）
-  var deck = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.05, 0.56), matDark);
+  // 驾驶室台面 + 车载显示终端
+  var deck = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.05, 0.56), mats.dark);
   deck.position.set(0.06, -0.20, -0.36);
-  body.add(deck);
+  chassis.add(deck);
 
   var console = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.32, 0.06),
     new THREE.MeshStandardMaterial({ color:0x0d2233, roughness:0.35, metalness:0.5,
       emissive: new THREE.Color(0x0a4a6e), emissiveIntensity:0.8 }));
   console.position.set(0.06, -0.02, -0.62);
   console.rotation.x = -0.34;
-  body.add(console);
+  chassis.add(console);
 
   var scr = new THREE.Mesh(new THREE.PlaneGeometry(0.40, 0.25),
     new THREE.MeshBasicMaterial({ color:0x6fe8ff, transparent:true, opacity:0.92 }));
   scr.position.set(0.06, -0.015, -0.588);
   scr.rotation.x = -0.34;
-  body.add(scr);
+  chassis.add(scr);
 
+  // ---------------------------------------------------------- 3 台机械臂
+  carArmUnits = carCfg.units.map(function(u){
+    var arm = buildArm(u, mats);
+    armsGrp.add(arm);
+    return arm;
+  });
+
+  // 臂端照明点光源（跟随中臂腕部，营造"工作灯"效果）
+  var workLight = new THREE.PointLight(0x5fe8ff, 1.6, 4.5, 2);
+  var midWrist = carArmUnits[1].userData.wrist;
+  workLight.position.set(0, 0.2, 0.2);
+  midWrist.add(workLight);
+  armsGrp.userData.workLight = workLight;
+
+  body.add(chassis);
+  body.add(armsGrp);
   body.position.set(PT.x0 + PT.segLen * 8, 0, 0);
   body.rotation.y = carHeading();
-  body.userData.pulse = pulse;
+  body.userData.chassis = chassis;          // 供第一视角隐藏
+  body.userData.arms    = armsGrp;          // 第一视角下保留
+  body.userData.pulse   = carArmUnits[1].userData.ring;   // 兼容原有脉冲逻辑
   gCar.add(body);
   gCar.userData.car = body;
 })();
@@ -2092,7 +2189,7 @@ var fp = {
   lastRing: -1,
   drag: false
 };
-var carEye = new THREE.Vector3(0.10, 0.34, -0.26);   // 相机在车体局部坐标中的位置
+var carEye = new THREE.Vector3(0.10, 0.34, -0.18);   // 相机在车体局部坐标中的位置
 
 var carHudEl  = document.getElementById('carHud');
 var ringFlashEl = document.getElementById('ringFlash');
@@ -2114,9 +2211,11 @@ function toggleFP(force){
     tipEl.style.display = 'none';
     labelLayer.style.display = '';                 // 保留病害标注以便沿途判读
     document.getElementById('ckCar').checked = true; gCar.visible = true;
-    // 第一视角即"车内视点"：把车体缩放至不可见（比 visible=false 更安全，
-    // 因为相机锚定在车体局部坐标上，仍需保证其世界矩阵每帧更新）
-    if (gCar.userData.car) gCar.userData.car.scale.setScalar(0.001);
+    // 第一视角即"车内视点"：只隐藏底盘/驾驶室（否则会挡住视线），
+    // **机械臂必须保留可见** —— 本视角要展示的正是机械臂贴壁扫查的过程。
+    // 用 scale 归零而非 visible=false，以保证相机锚点车体的世界矩阵每帧更新。
+    if (gCar.userData.car && gCar.userData.car.userData.chassis)
+      gCar.userData.car.userData.chassis.scale.setScalar(0.001);
     // 从起点开始本次遍历
     if (gCar.userData.car) gCar.userData.car.position.x = PT.x0 + 0.5;
     fp.dist = 0; fp.lastRing = -1;
@@ -2125,7 +2224,8 @@ function toggleFP(force){
     releaseCut();                                  // 避免残留剖切面遮挡车内视野
   } else {
     ringFlashEl.classList.remove('on');
-    if (gCar.userData.car) gCar.userData.car.scale.setScalar(1);   // 恢复车体
+    if (gCar.userData.car && gCar.userData.car.userData.chassis)
+      gCar.userData.car.userData.chassis.scale.setScalar(1);   // 恢复底盘
     setView('iso');
   }
 }
@@ -2359,6 +2459,8 @@ function hudUpdate(carX){
   chRingEl.textContent = String(ringNo);
   chScanEl.textContent = fmt(Math.max(0, carX - PT.x0), 1) + ' m';
   chSpeedEl.textContent = fmt(fp.speed, 1) + ' m/s';
+  var armEl = document.getElementById('chArm');
+  if (armEl) armEl.textContent = carArmUnits.length + ' 臂扫查';
 
   // 过环闪烁
   if (ringNo !== fp.lastRing){
@@ -2566,6 +2668,34 @@ function frame(){
     if (!bk.mesh.parent || !bk.mesh.parent.visible) continue;
     var bs = Math.max(0, Math.sin(t * 2.2 + bk.phase));
     bk.mesh.material.opacity = 0.12 + 0.88 * bs * bs * bs;
+  }
+
+  // 多机械臂扫查动画：绕肩关节抬升摆动 + 肘部随动 + 天线阵脉冲与衬砌光斑
+  for (var ai = 0; ai < carArmUnits.length; ai++){
+    var A = carArmUnits[ai], cfg = A.userData.cfg;
+    // baseAng 为抬升基准角（负值上抬），叠加扫查摆动
+    var ang = cfg.baseAng + carCfg.sweep * Math.sin(t * carCfg.rate + cfg.phase);
+    A.rotation.x = ang;
+    // 肘部随动：以各臂自身肘角为中心小幅摆动
+    A.userData.elbow.rotation.x = cfg.elbow + 0.12 * Math.cos(t * carCfg.rate + cfg.phase);
+    // 天线阵脉冲环
+    var pr = A.userData.ring;
+    if (pr){
+      var ph2 = (t * 2.6 + cfg.phase * 0.3) % 1;
+      pr.scale.setScalar(0.55 + ph2 * 2.2);
+      pr.material.opacity = (1 - ph2) * 0.8;
+    }
+    // 打在衬砌上的扫查光斑（呼吸）
+    var sp = A.userData.spot;
+    if (sp){
+      sp.material.opacity = 0.18 + 0.16 * (1 + Math.sin(t * 2.6 + cfg.phase)) / 2;
+      var sr = 0.9 + 0.12 * Math.sin(t * 2.6 + cfg.phase);
+      sp.scale.setScalar(sr);
+    }
+  }
+  // 臂端工作灯随中臂摆动
+  if (gCar.userData.arms && gCar.userData.arms.userData.workLight){
+    gCar.userData.arms.userData.workLight.intensity = 1.3 + 0.5 * Math.sin(t * 2.6);
   }
 
   // 检测车行进：第一视角按作业速度匀速遍历，普视模式按时间巡游
