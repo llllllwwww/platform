@@ -1,0 +1,35 @@
+# GPR 病害检测模型：YOLO11s 主干 + AFPN 颈部
+# 文件名中的 yolo11s 不可改动：Ultralytics 靠文件名推断 scale，
+# scale 决定 width/depth，主干的真实通道数（P3/P4/P5 = 256/256/512）由它决定，
+# 而 AFPN 那一行写死的通道数必须与之一致。
+
+nc: 2 # 类别数，训练时会被 data.yaml 覆盖
+
+scales: # [depth, width, max_channels]
+  s: [0.50, 0.50, 1024]
+
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2
+  - [-1, 1, Conv, [128, 3, 2]] # 1-P2/4
+  - [-1, 2, C3k2, [256, False, 0.25]]
+  - [-1, 1, Conv, [256, 3, 2]] # 3-P3/8
+  - [-1, 2, C3k2, [512, False, 0.25]] # 4  -> P3，实际 256 通道
+  - [-1, 1, Conv, [512, 3, 2]] # 5-P4/16
+  - [-1, 2, C3k2, [512, True]] # 6  -> P4，实际 256 通道
+  - [-1, 1, Conv, [1024, 3, 2]] # 7-P5/32
+  - [-1, 2, C3k2, [1024, True]]
+  - [-1, 1, SPPF, [1024, 5]] # 9
+  - [-1, 2, C2PSA, [1024]] # 10 -> P5，实际 512 通道
+
+# AFPN 取代了原版的 top-down + bottom-up FPN/PAN 颈部：
+#   第 11 层是 AFPN，多输入（4/6/10）多输出（3 路 tuple）；
+#   第 12/13/14 层用 Index 各取一路，再送 Detect。
+# 注意：第 11 层的 from 写成列表 [4, 6, 10]（Ultralytics 原生不支持未知模块的多输入写法，
+# 由 src/detector.py 里对 parse_model 的一次包装来支撑，见该文件顶部说明）。
+head:
+  - [[4, 6, 10], 1, AFPN, [[256, 256, 512], 256, 3]] # 11
+  - [11, 1, Index, [256, 0]] # 12 -> P3/8-small
+  - [11, 1, Index, [256, 1]] # 13 -> P4/16-medium
+  - [11, 1, Index, [256, 2]] # 14 -> P5/32-large
+  - [[12, 13, 14], 1, Detect, [nc]] # 15 Detect(P3, P4, P5)

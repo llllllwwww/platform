@@ -1,0 +1,4 @@
+# 锁定已在 venv 中验证可用的 GPU 版 torch，避免 ultralytics 依赖解析时把 torch 换成 CPU 轮子
+torch==2.11.0
+torchvision==0.26.0
+numpy<2.6

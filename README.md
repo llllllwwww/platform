@@ -62,6 +62,12 @@
 ├── index.html                   # 站点入口（自动跳转到平台主页面）
 ├── 隧道三维数字孪生平台.html    # 平台主文件（单文件应用）
 ├── 平台使用说明.md              # 完整使用说明（11 章，含演示脚本与算法说明）
+├── algorithm/                   # 底层深度学习算法（数据下载 + 训练验证全流程）
+│   ├── README.md                # 数据来源、环境准备、训练验证步骤
+│   ├── scripts/                 # 一键下载数据 / 一键跑通流程
+│   ├── configs/                 # YOLO11 + AFPN 模型配置
+│   ├── src/                     # AFPN 模块、训练、推理、数据构建
+│   └── docs/REFERENCES.md       # 算法链对应论文与同类工作指标对照
 ├── .nojekyll                    # 关闭 GitHub Pages 的 Jekyll 处理
 ├── .gitignore
 ├── .gitattributes
@@ -95,6 +101,33 @@
 第一视角中的 B-scan 雷达剖面为**按病害台账参数程序化合成的示意剖面**（用于展示原始数据形态与双曲线特征），并非真实 `.dzt` 道集回放。
 
 接入实测数据时，替换 HTML 中 `var DEFECTS = [` 数组即可，SHI、风险分级、图表、环向展开图与导出报告会自动联动。
+
+---
+
+## 底层算法
+
+平台的病害识别能力由 `algorithm/` 目录下的深度学习算法提供，与前端解耦：
+
+| 环节 | 实现 |
+|---|---|
+| **数据** | 17338 张真实隧道衬砌现场照片（裂缝 / 渗漏 / 无病害）+ 带像素掩码的 TTD / CTCD |
+| **标注策略** | 主线照片只有文件夹级标签 → 先用带掩码数据训练 AFPN-Seg 分割器，再伪标注生成检测框 |
+| **模型** | YOLO11 + **AFPN**（Asymptotic Feature Pyramid Network，官方实现等价移植为纯 PyTorch） |
+| **任务** | 检测 / 分割双头，类别：裂缝 crack、渗水 water、渗漏析出物 leaching |
+
+数据全部由脚本一键下载（含来源链接与许可），训练验证全流程可复现：
+
+```powershell
+cd algorithm
+python scripts\download_data.py                 # 下载数据（约 2.6 GB）
+.\scripts\run_pipeline.ps1                      # 训练 + 验证 + 测试全流程
+```
+
+详见 [`algorithm/README.md`](algorithm/README.md)（环境、数据来源、切分防泄漏规则、模型接线）
+与 [`algorithm/docs/REFERENCES.md`](algorithm/docs/REFERENCES.md)（RCAN / RTM / AFPN 对应论文与同类工作指标对照）。
+
+> 前端顶栏标注的解译算法链 **RCAN + RTM + YOLOv7-AFPN**，当前已实现检测段（AFPN 颈部），
+> RCAN 与 RTM 为后续阶段。
 
 ---
 
