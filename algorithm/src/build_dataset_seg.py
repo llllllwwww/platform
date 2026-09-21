@@ -27,6 +27,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+ROOT = Path(__file__).resolve().parent.parent
+
 CLASS_NAMES = ["crack", "water", "leaching"]
 CLASS_CN = {"crack": "裂缝", "water": "渗水", "leaching": "析出物"}
 # TTD 掩码像素值 -> class id
@@ -147,9 +149,9 @@ def items_to_labels(item: dict, min_area: int, max_polys: int) -> list[str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="构建隧道病害分割数据集（伪标注器训练用）")
-    ap.add_argument("--ttd", type=Path, default=Path(r"f:\tmp\gpr-dl\data\raw\ttd"))
-    ap.add_argument("--ctcd", type=Path, default=Path(r"f:\tmp\gpr-dl\data\raw\ctcd"))
-    ap.add_argument("--out", type=Path, default=Path(r"f:\tmp\gpr-dl\data\processed\ttd_seg"))
+    ap.add_argument("--ttd", type=Path, default=ROOT / "data" / "raw" / "ttd")
+    ap.add_argument("--ctcd", type=Path, default=ROOT / "data" / "raw" / "ctcd")
+    ap.add_argument("--out", type=Path, default=ROOT / "data" / "processed" / "ttd_seg")
     ap.add_argument("--min-area", type=int, default=40, help="连通域最小像素面积")
     ap.add_argument("--max-polys", type=int, default=40, help="单类单图最多保留的多边形数")
     ap.add_argument("--neg-keep-prob", type=float, default=0.5, help="无病害图的保留概率（作为负样本）")

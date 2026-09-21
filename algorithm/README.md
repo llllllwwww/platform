@@ -65,6 +65,32 @@ python -c "import torch;print(torch.__version__, torch.cuda.is_available(), torc
 > ⚠️ 训练/推理要在普通终端里跑（不要放在受限沙箱环境）：ultralytics 需要写
 > 自己的配置目录与字节码缓存，权限被拒会中断。
 
+### Linux / macOS
+
+已在 Ubuntu 22.04 + Python 3.11 + A100(80GB) 上验证。命令与上面等价，只有两点不同：
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+
+# torch 官方源在国内可能只有几十 KB/s，可先给 pip 换个镜像（-i）
+pip install torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+pip install -r requirements.txt -c configs/constraints.txt
+```
+
+一键流程用 `scripts/run_pipeline.sh`（与 `.ps1` 参数一致，见第五节）。
+
+> ⚠️ **无头服务器上 `import cv2` 会失败**：`opencv-python` 的 GUI 轮子依赖
+> `libxcb.so.1` / `libGL.so.1`，纯命令行的 Linux 容器里通常没有，报错形如
+> `ImportError: libxcb.so.1: cannot open shared object file`。
+> 二选一：`apt-get install -y libxcb1 libgl1 libglib2.0-0`，
+> 或改装无 GUI 依赖的 `pip install opencv-python-headless`。
+
+> ⚠️ **huggingface.co 不可达时**：`download_data.py` 会在 TTD / CTCD 那步报
+> `ConnectError: Cannot assign requested address`。可改用镜像
+> `HF_ENDPOINT=https://hf-mirror.com python3 scripts/download_data.py`；
+> 若卡在 `cas-bridge.xethub.hf.co`（Xet 传输会绕过镜像直连），
+> 再叠加 `pip uninstall hf-xet` 退回普通 HTTP 下载。
+
 ---
 
 ## 二、数据集
@@ -159,6 +185,14 @@ python scripts\download_data.py --verify    # 校验文件数
 .\scripts\run_pipeline.ps1                      # 全流程
 .\scripts\run_pipeline.ps1 -SkipDownload        # 跳过数据下载
 .\scripts\run_pipeline.ps1 -Stage seg           # 只训练伪标注器
+```
+
+Linux / macOS：
+
+```bash
+./scripts/run_pipeline.sh                       # 全流程
+./scripts/run_pipeline.sh --skip-download       # 跳过数据下载
+./scripts/run_pipeline.sh --stage seg           # 只训练伪标注器
 ```
 
 ### 5.2 分步执行
@@ -280,6 +314,16 @@ head
 |---|---|---|---|---|---|---|
 | AFPN-Seg（伪标注器） | 512 | 101/150 | 0.198 (box) | 0.088 (box) | 0.309 | 训练进行中；mask mAP50 ≈ 0.008（细裂缝 IoU 敏感） |
 | AFPN-Det（最终检测器） | 640 | 待跑 | | | | 训练在伪标注框上 |
+
+在 **Ubuntu 22.04 + Python 3.11 + A100(80GB)** 上完整复现的一轮（`./scripts/run_pipeline.sh`，默认超参，跑满 150 epoch 未早停）：
+
+| 模型 | 输入 | epoch | val mAP50 | val mAP50-95 | test mAP50 | test mAP50-95 | 备注 |
+|---|---|---|---|---|---|---|---|
+| AFPN-Seg（伪标注器） | 512 | 150/150 | 0.210 (box) | 0.108 (box) | — | — | mask mAP50 = 0.0036，复现了"细裂缝掩码 IoU 崩掉"的现象 |
+| AFPN-Det（最终检测器） | 640 | 150/150 | 0.565 | 0.349 | 0.522 | 0.321 | 训练在伪标注框上 |
+
+伪标注覆盖率：crack 83.1% / leakage 78.3% / `no defects` 强制 0%（干净负样本）。
+注意 `water` 类伪框极少（train 仅 401 个 vs leaching 19037 个），其 mAP 波动大。
 
 ### 7.2 GPR 分支
 
