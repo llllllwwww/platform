@@ -19,6 +19,8 @@ import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
+
 # 类别顺序即 YOLO 的 class id，必须与 data.yaml 的 names 完全一致
 CLASS_NAMES = ["cavity", "utility"]
 CLASS_CN = {"cavity": "空洞", "utility": "管线"}
@@ -215,13 +217,13 @@ def main() -> None:
     ap.add_argument(
         "--raw",
         type=Path,
-        default=Path(r"f:\tmp\gpr-dl\data\raw\GPR_data_extracted\GPR_data"),
+        default=ROOT / "data" / "raw" / "GPR_data_extracted" / "GPR_data",
         help="解压后的原始数据集根目录",
     )
     ap.add_argument(
         "--out",
         type=Path,
-        default=Path(r"f:\tmp\gpr-dl\data\processed\gpr_det"),
+        default=ROOT / "data" / "processed" / "gpr_det",
         help="输出目录",
     )
     ap.add_argument("--seed", type=int, default=42)

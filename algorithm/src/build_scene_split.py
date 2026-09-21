@@ -21,6 +21,8 @@ import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
+
 IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp"}
 
 # 文件夹标签 -> 语义
@@ -67,17 +69,22 @@ def scan(root: Path) -> list[dict]:
     return items
 
 
+def default_scene_root() -> Path:
+    """定位下载脚本解出来的 dataset 目录。
+
+    download_data.py 解压后目录名带分支后缀（-master / -main），这里用通配匹配，
+    避免把某台机器的绝对盘符路径写死（原先是 f:\\tmp\\gpr-dl\\...）。
+    """
+    base = ROOT / "data" / "raw" / "tunnel_lining" / "extracted" / "extracted"
+    for d in sorted(base.glob("*/dataset")):
+        return d
+    return base
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="建立隧道场景照片的切分清单")
-    ap.add_argument(
-        "--root",
-        type=Path,
-        default=Path(
-            r"f:\tmp\gpr-dl\data\raw\tunnel_lining\extracted"
-            r"\Tunnel_lining_multi-category_defect_segmentation_detection-master\dataset"
-        ),
-    )
-    ap.add_argument("--out", type=Path, default=Path(r"f:\tmp\gpr-dl\data\processed\scene_split.json"))
+    ap.add_argument("--root", type=Path, default=default_scene_root())
+    ap.add_argument("--out", type=Path, default=ROOT / "data" / "processed" / "scene_split.json")
     ap.add_argument("--block", type=int, default=25, help="同序列连续多少帧绑定为一个切分单元")
     ap.add_argument("--ratios", default="0.8,0.1,0.1")
     ap.add_argument("--seed", type=int, default=42)

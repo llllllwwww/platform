@@ -187,6 +187,22 @@ def fetch_direct_file(spec: dict, dest_dir: Path) -> None:
         print("  [警告] 没有可用的 rar 解压工具，请手工解压后放到", out)
 
 
+def is_ready(spec: dict, dest_dir: Path) -> bool:
+    """数据集是否已就绪。
+
+    不能简单用 `dest 非空` 判断：github_tar 的归档本身就落在 dest 里，
+    一旦上下载中断留下残缺归档，这里会误判为已完成、跳过解压，
+    后面 verify 必然失败而用户无从恢复（只能手工删目录）。
+    因此 github_tar 以解压产物为准。
+    """
+    if not dest_dir.exists():
+        return False
+    if spec["kind"] == "github_tar":
+        out = dest_dir / "extracted"
+        return out.exists() and any(out.iterdir())
+    return any(dest_dir.rglob("*"))
+
+
 def verify(name: str, spec: dict, dest_dir: Path) -> bool:
     expect = spec.get("expect")
     if not expect:
@@ -240,7 +256,7 @@ def main() -> None:
         if args.verify:
             results[name] = verify(name, spec, dest)
             continue
-        if dest.exists() and any(dest.rglob("*")):
+        if is_ready(spec, dest):
             print(f"  目录已存在，跳过下载 -> {dest}")
         else:
             if spec["kind"] == "github_tar":
