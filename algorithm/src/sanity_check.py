@@ -15,6 +15,8 @@ import cv2
 import numpy as np
 import yaml
 
+ROOT = Path(__file__).resolve().parent.parent
+
 # 各类别的框颜色（BGR），超出长度时循环取用
 PALETTE = [(0, 0, 255), (255, 176, 32), (0, 200, 0), (200, 0, 200), (255, 255, 0), (0, 128, 255)]
 
@@ -81,13 +83,13 @@ def montage(imgs: list[np.ndarray], cols: int, cell: int = 224) -> np.ndarray:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--root", type=Path, default=Path(r"f:\tmp\gpr-dl\data\processed\gpr_det"))
+    ap.add_argument("--root", type=Path, default=ROOT / "data" / "processed" / "gpr_det")
     ap.add_argument("--split", default="val")
     ap.add_argument("--n", type=int, default=16)
     ap.add_argument("--cols", type=int, default=4)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument(
-        "--out", type=Path, default=Path(r"f:\tmp\gpr-dl\reports\sanity_labels.png")
+        "--out", type=Path, default=ROOT / "reports" / "sanity_labels.png"
     )
     args = ap.parse_args()
 
