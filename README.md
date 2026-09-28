@@ -4,6 +4,12 @@
 
 本版本包含实际可执行的 CSV 解析、数值预处理、AHP/熵权计算、参数化三维联动和本地处置记录。内置病害、示意雷达信号、健康评分配置与仿真预测均明确标记为演示；尚未连接真实识别模型或设备，不作为工程鉴定结论。
 
+## 在线访问
+
+**https://llllllwwww.github.io/platform/**
+
+平台已通过 GitHub Pages 发布，浏览器直接打开即可使用，无需安装任何环境。建议使用支持 WebGL 的现代浏览器（Chrome / Edge / Firefox / Safari）。
+
 ## 启动
 
 推荐在本目录双击 **启动平台.cmd**。启动器使用 Python 3 标准库，仅监听本机回环地址，并打开：
@@ -91,7 +97,7 @@ CSV 为纯数值矩阵，无表头，行是采样点、列是道；至少 2×2�
 
 已执行 `node tests/core.test.js`，**14 组测试通过**，覆盖批次隔离、AHP/熵权、CSV 错误与上限、权重联动、严重局部风险保留、车辆几何、结构量纲、方案排序及导出范围。Node 仅用于开发验证，日常使用平台不需要 Node。浏览器实测结果以本轮交付的验证记录为准；核心单元测试不替代界面和工程精度验证。
 
-本版已同步至 GitHub 仓库 `llllllwwww/platform`（分支 `main`）；历史在线页面不作为新版入口。
+本版已同步至 GitHub 仓库 [llllllwwww/platform](https://github.com/llllllwwww/platform)（分支 `main`），在线平台地址 [https://llllllwwww.github.io/platform/](https://llllllwwww.github.io/platform/)；历史在线页面不作为新版入口。
 
 算法适配器校验可运行 `node tests/adapters.test.js`，覆盖默认未接入、注册版本、缓存、重试、取消及输出字段，共 10 组。浏览器与导出检查见 [本地验证记录](验证记录.md)。
 
