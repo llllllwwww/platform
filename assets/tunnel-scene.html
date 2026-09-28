@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隧雷智检 · 三维场景组件</title>
+<script>if (window.parent === window) location.replace("../index.html#twin");</script>
+<link rel="stylesheet" href="tunnel-scene.css">
+<style>
+body.embedded { background:#07101c; }
+body.embedded > :not(#stage):not(#labels):not(#loading):not(#carHud):not(#flyHud):not(#tip):not(#ringFlash):not(script):not(style){display:none!important}
+body.embedded #carHud{left:auto;right:10px;bottom:10px;width:300px;transform:none;max-height:72%;overflow:auto}body.embedded.no-hud #carHud{display:none!important}body.embedded #flyHud{bottom:10px;font-size:10px;max-width:90%}body.embedded .lbl{font-size:10px!important;background:#102334e8!important;border:1px solid #426070!important;box-shadow:none!important;padding:3px 7px!important;max-width:150px}
+</style></head>
+<body class="embedded">
+
+<div id="stage"></div>
+<div id="labels"></div>
+
+<!-- ================= 顶栏 ================= -->
+<div id="hud">
+  <div class="brand">
+    <div class="logo">隧</div>
+    <div>
+      <h1>隧雷智检 · <span>隧道结构三维数字孪生平台</span></h1>
+      <div class="sub">TUNNEL DIGITAL TWIN · GPR BASED HIDDEN DEFECT INSPECTION</div>
+    </div>
+  </div>
+  <div class="vsep"></div>
+  <div class="chips">
+    <div class="chip"><span class="dot"></span>数据链路 <b>在线</b></div>
+    <div class="chip">工点 <b>地铁 4 号线 · 王家湾隧道</b></div>
+    <div class="chip">里程 <b>K3+128 ~ K3+176</b></div>
+    <div class="chip">管片环 <b>980 ~ 1019</b></div>
+    <div class="chip">解译 <b>RCAN + RTM + YOLOv7-AFPN</b></div>
+  </div>
+  <div id="viewbar">
+    <button class="vbtn" data-view="iso">轴测全景</button>
+    <button class="vbtn" data-view="in">隧道内部</button>
+    <button class="vbtn" data-view="cross">横断面剖切</button>
+    <button class="vbtn" data-view="top">俯视展开</button>
+    <button class="vbtn" data-view="crown">拱顶特写</button>
+    <button class="vbtn" data-view="invert">仰拱特写</button>
+    <button class="vbtn" id="btnCarView">检测车第一视角</button>
+    <button class="vbtn" id="btnPause">⏸ 暂停检测（P）</button>
+    <button class="vbtn" id="btnRotate">自动旋转</button>
+  </div>
+</div>
+
+<!-- ================= 左侧栏 ================= -->
+<div class="side" id="left">
+  <div class="sec">
+    <div class="sec-h">工点概况 <span class="tail">检测批次 DT-2024-1118</span></div>
+    <div class="kvs">
+      <div class="kv"><span>隧道类型</span><b>盾构隧道 · 单洞单线</b></div>
+      <div class="kv"><span>衬砌内径 / 管片厚</span><b>5.4 m / 0.35 m</b></div>
+      <div class="kv"><span>检测方式</span><b>机械臂 GPR 车载连续扫描</b></div>
+      <div class="kv"><span>采集时间</span><b>2024-11-18 01:20 ~ 03:05</b></div>
+      <div class="kv"><span>环号定位精度</span><b>±0.15 m（27 维 EKF）</b></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">结构健康指数 SHI <span class="tail">AHP + 熵权组合赋权</span></div>
+    <div class="shi-wrap">
+      <canvas id="shiGauge" width="150" height="150"></canvas>
+      <div class="shi-meta">
+        <div class="shi-val" id="shiVal">--<small>/100</small></div>
+        <div class="shi-tag" id="shiTag">计算中</div>
+        <div class="shi-desc" id="shiDesc"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">病害类型分布 <span class="tail">共 <b id="dTotal">0</b> 处</span></div>
+    <div class="stat" id="statBars"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">病害等级筛选 <span class="tail">点选定位</span></div>
+    <div class="filters" id="lvFilters"></div>
+    <div class="filters" id="typeFilters" style="margin-top:7px;"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">病害清单 <span class="tail">点击行选中 · 「定位」飞行</span></div>
+    <div class="dlist" id="defectList"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">显示控制</div>
+    <div class="toggles">
+      <label class="tg"><input type="checkbox" id="ckShell" checked><span class="sw"></span>管片衬砌（透视）</label>
+      <label class="tg"><input type="checkbox" id="ckDefect" checked><span class="sw"></span>隐蔽病害体（高亮）</label>
+      <label class="tg"><input type="checkbox" id="ckRebar" checked><span class="sw"></span>钢筋网（双层）</label>
+      <label class="tg"><input type="checkbox" id="ckGrout" checked><span class="sw"></span>壁后注浆层</label>
+      <label class="tg"><input type="checkbox" id="ckGround" checked><span class="sw"></span>地层模型</label>
+      <label class="tg"><input type="checkbox" id="ckLabel" checked><span class="sw"></span>病害标注引线（仅 I/II 级）</label>
+      <label class="tg"><input type="checkbox" id="ckLabelAll"><span class="sw"></span>标注全部病害</label>
+      <label class="tg"><input type="checkbox" id="ckCar" checked><span class="sw"></span>检测车 / 机械臂</label>
+      <label class="tg"><input type="checkbox" id="ckRay"><span class="sw"></span>GPR 电磁波射线</label>
+      <label class="tg"><input type="checkbox" id="ckStars" checked><span class="sw"></span>星空背景</label>
+      <label class="tg"><input type="checkbox" id="ckCity" checked><span class="sw"></span>城市天际线</label>
+      <label class="tg"><input type="checkbox" id="ckProfile"><span class="sw"></span>断面偏差可视化（参数化演示断面）</label>
+    </div>
+    <div class="slice-row">
+      <span>纵剖切面</span>
+      <input type="range" id="slice" min="0" max="100" value="100">
+      <span id="sliceTxt" style="width:58px;text-align:right;">关</span>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">操作</div>
+    <div class="btns">
+      <div class="btn wide pri" id="btnCarView2">▶ 进入检测车第一视角</div>
+      <div class="btn wide" id="btnPause2">⏸ 暂停 / 继续检测（P）</div>
+      <div class="btn wide" id="btnFly">🚁 自由飞行漫游（G 键）</div>
+      <div class="btn" id="btnNext">下一处病害</div>
+      <div class="btn" id="btnFit">重置视角</div>
+      <div class="btn" id="btnIsoCut">剖切总览</div>
+      <div class="btn" id="btnAlarm">预警清单</div>
+      <div class="btn wide" id="btnReport">导出检测评估报告</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 右侧栏 ================= -->
+<div class="side" id="right">
+  <div class="sec" id="detail">
+    <div class="sec-h">病害详情 <span class="tail" id="dIdx">未选中</span></div>
+    <div class="empty" id="detailEmpty">
+      鼠标左键拖动可 360° 翻转隧道<br>
+      滚轮缩放 · 右键拖动平移<br>
+      点击隧道内的病害体查看量化指标<br>
+      <span style="color:#7fd4ff">点「检测车第一视角」可随车遍历整条隧道</span>
+    </div>
+    <div id="detailBody" style="display:none;"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">环向展开定位 <span class="tail">拱顶 = 0°</span></div>
+    <canvas id="ringCanvas" width="720" height="380"></canvas>
+  </div>
+
+  <div class="sec">
+    <div class="sec-h">SHI 多期次演化 <span class="tail">劣化速率</span></div>
+    <canvas id="shiChart" width="720" height="230"></canvas>
+    <div class="kvs" style="margin-top:9px;">
+      <div class="kv"><span>劣化速率 R</span><b id="rateVal">--</b></div>
+      <div class="kv"><span>风险指数 RI</span><b>0.71（高）</b></div>
+      <div class="kv"><span>建议复检周期</span><b>3 个月 / 次</b></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 底部图例 ================= -->
+<div id="legend">
+  <div class="lg-group">
+    <span class="lg-t">病害等级</span>
+    <span class="lg"><i style="background:#ff3b3b"></i>I 严重</span>
+    <span class="lg"><i style="background:#ff9d2e"></i>II 较重</span>
+    <span class="lg"><i style="background:#ffd633"></i>III 一般</span>
+    <span class="lg"><i style="background:#48e0a0"></i>IV 轻微</span>
+  </div>
+  <div class="vline"></div>
+  <div class="lg-group">
+    <span class="lg-t">病害类型</span>
+    <span class="lg"><i class="cir" style="background:#ff2d55"></i>空气空洞</span>
+    <span class="lg"><i class="cir" style="background:#3fd0ff"></i>充水/富水</span>
+    <span class="lg"><i class="cir" style="background:#ffb020"></i>脱空</span>
+    <span class="lg"><i class="cir" style="background:#c07b3a"></i>不密实</span>
+    <span class="lg"><i class="dia" style="background:#b44cff"></i>钢筋异常</span>
+    <span class="lg"><i class="dia" style="background:#ffe14d"></i>裂缝/渗漏</span>
+  </div>
+  <div class="vline"></div>
+  <div class="lg-group">
+    <span class="lg-t">结构</span>
+    <span class="lg"><i style="background:#7c8b97"></i>管片衬砌</span>
+    <span class="lg"><i style="background:#4a7a5e"></i>注浆层</span>
+    <span class="lg"><i style="background:#8c7048"></i>围岩</span>
+  </div>
+</div>
+
+<div id="tip"></div>
+
+<!-- ================= 检测车第一视角 HUD ================= -->
+<div id="carHud">
+  <div class="ch-top">
+    <span class="ch-rec"><i></i><span class="rec-txt">REC</span></span>
+    <span class="ch-t">检测车第一视角 · 探地雷达实时采集</span>
+    <span class="ch-sp">GPR 400 MHz</span>
+  </div>
+  <canvas id="bscan" width="800" height="236"></canvas>
+  <div class="ch-bar">
+    <span>里程</span>
+    <span class="track"><i id="chBar"></i></span>
+    <b id="chMile">K3+128</b>
+  </div>
+  <div class="ch-grid">
+    <div class="ch-cell"><div class="k">当前环号</div><div class="v" id="chRing">980</div></div>
+    <div class="ch-cell"><div class="k">作业速度</div><div class="v" id="chSpeed">3.6 m/s</div></div>
+    <div class="ch-cell"><div class="k">已扫里程</div><div class="v" id="chScan">0.0 m</div></div>
+    <div class="ch-cell"><div class="k">机械臂</div><div class="v" id="chArm">3 臂扫查</div></div>
+    <div class="ch-cell"><div class="k">主频 / 时窗</div><div class="v">400MHz / 30ns</div></div>
+  </div>
+  <div class="ch-grid" style="margin-top:6px">
+    <div class="ch-cell"><div class="k">当前环椭圆度</div><div class="v" id="chOval">—</div></div>
+    <div class="ch-cell"><div class="k">本环环缝错台</div><div class="v" id="chJoint">—</div></div>
+    <div class="ch-cell" style="grid-column:span 3"><div class="k">臂端贴壁靶面半径 / 断面状态</div><div class="v" id="chProf">—</div></div>
+  </div>
+  <div class="ch-alert quiet" id="chAlert">本段未发现异常回波</div>
+</div>
+
+<div id="ringFlash"></div>
+
+<div id="flyHud">自由飞行：W/S 前后 · A/D 左右 · Q/E 升降 · Shift 加速 · 按住左键拖动转视角 · G 退出</div>
+
+<div id="loading">
+  <div class="ring"></div>
+  <p>正在加载三维孪生场景…</p>
+  <div class="err" id="loadErr"></div>
+</div>
+
+<script src="../vendor/three.min.js"></script>
+<script src="tunnel-scene.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "traceSpacingM": 0.02,
+  "sampleIntervalNs": 0.1,
+  "timeWindowNs": 3.1,
+  "epsilon": 6,
+  "amplitudeUnit": "示意归一化振幅",
+  "lineId": "EXAMPLE-L01",
+  "source": "格式样例，程序生成，非实测"
+}

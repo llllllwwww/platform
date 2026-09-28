@@ -1,50 +1,68 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>隧雷智检 · 隧道结构三维数字孪生平台</title>
-<meta name="description" content="基于探地雷达的隧道隐蔽病害三维数字孪生可视化平台">
-<meta http-equiv="refresh" content="0; url=./%E9%9A%A7%E9%81%93%E4%B8%89%E7%BB%B4%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%B9%B3%E5%8F%B0.html">
-<link rel="canonical" href="./%E9%9A%A7%E9%81%93%E4%B8%89%E7%BB%B4%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%B9%B3%E5%8F%B0.html">
-<style>
-  html,body{height:100%;margin:0;}
-  body{
-    display:flex;align-items:center;justify-content:center;
-    background:#050a14;color:#d9e9f8;
-    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;
-  }
-  .box{text-align:center;max-width:520px;padding:24px;}
-  .ring{
-    width:46px;height:46px;margin:0 auto 20px;
-    border:3px solid rgba(47,212,255,.2);border-top-color:#2fd4ff;
-    border-radius:50%;animation:spin .9s linear infinite;
-  }
-  @keyframes spin{to{transform:rotate(360deg)}}
-  h1{font-size:17px;font-weight:700;letter-spacing:.5px;margin:0 0 6px;}
-  h1 span{color:#2fd4ff;}
-  p{font-size:12.5px;color:#89a7c4;line-height:1.9;margin:0 0 18px;}
-  a.go{
-    display:inline-block;padding:10px 22px;border-radius:8px;
-    background:linear-gradient(180deg,#1f86c9,#0d4f86);
-    border:1px solid #2fd4ff;color:#fff;text-decoration:none;
-    font-size:13px;font-weight:600;transition:.16s;
-  }
-  a.go:hover{box-shadow:0 0 16px rgba(47,212,255,.5);}
-  .sub{font-size:11px;color:#5f7d99;margin-top:16px;letter-spacing:1px;}
-</style>
-</head>
-<body>
-  <div class="box">
-    <div class="ring"></div>
-    <h1>隧雷智检 · <span>隧道结构三维数字孪生平台</span></h1>
-    <p>正在进入三维孪生场景…<br>若未自动跳转，请点击下方按钮。</p>
-    <a class="go" href="./%E9%9A%A7%E9%81%93%E4%B8%89%E7%BB%B4%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%B9%B3%E5%8F%B0.html">进入三维孪生平台</a>
-    <div class="sub">TUNNEL DIGITAL TWIN · GPR BASED HIDDEN DEFECT INSPECTION</div>
-  </div>
-  <script>
-    // 立即跳转到平台主页面（保留 noscript/无 JS 环境下的手动入口）
-    location.replace('./%E9%9A%A7%E9%81%93%E4%B8%89%E7%BB%B4%E6%95%B0%E5%AD%97%E5%AD%AA%E7%94%9F%E5%B9%B3%E5%8F%B0.html');
-  </script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="隧雷智检四模块本地工作台" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%2356d9b1%22/%3E%3C/svg%3E"
+    />
+    <title>隧雷智检 · 隧道智能检测与数字孪生平台</title>
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script defer src="assets/core.js"></script>
+    <script defer src="assets/adapters.js"></script>
+    <script defer src="assets/app.js"></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="#overview"
+        ><span class="brand-mark">隧</span
+        ><span
+          ><strong>隧雷智检</strong><small>TUNNEL INTELLIGENCE</small></span
+        ></a
+      >
+      <div class="workspace-label">工程工作空间 <span>V2.0</span></div>
+      <nav id="navigation" aria-label="主导航"></nav>
+      <div class="sidebar-bottom">
+        <span class="status-dot"></span> 本地工作台
+        <small>数据保存在当前浏览器</small
+        ><a href="平台使用说明.md" target="_blank">使用说明 ↗</a>
+      </div>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="project">
+          <span class="status-dot"></span><b>示范隧道</b
+          ><span class="muted">/</span><span>K3+128 — K3+176</span>
+        </div>
+        <div class="top-actions">
+          <label for="batch">检测批次</label
+          ><select id="batch" aria-label="检测批次"></select
+          ><span class="badge mint" id="dataBadge">演示数据</span
+          ><button class="icon-button" id="helpButton" aria-label="操作指引">
+            ?
+          </button>
+        </div>
+      </header>
+      <main id="page" tabindex="-1"></main>
+      <footer class="footer">
+        <span>隧道智能检测与数字孪生平台</span
+        ><span id="saveStatus">本地状态已就绪</span
+        ><span>检测 · 理解 · 评估 · 决策</span>
+      </footer>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="modal">
+      <div id="modalContent"></div>
+      <button
+        class="dialog-close"
+        data-action="close-modal"
+        aria-label="关闭弹窗"
+      >
+        ×
+      </button>
+    </dialog>
+    <noscript>请启用 JavaScript 后使用本地平台。</noscript>
+  </body>
 </html>

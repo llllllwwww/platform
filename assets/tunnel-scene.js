@@ -1,531 +1,3 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>隧雷智检 · 隧道结构三维数字孪生平台</title>
-<style>
-  :root{
-    --bg0:#050a14;
-    --bg1:#0a1526;
-    --panel:rgba(11,22,40,.86);
-    --line:rgba(64,148,214,.28);
-    --line2:rgba(64,148,214,.15);
-    --txt:#d9e9f8;
-    --txt2:#89a7c4;
-    --accent:#2fd4ff;
-    --accent2:#1c8ad6;
-    --I:#ff3b3b;
-    --II:#ff9d2e;
-    --III:#ffd633;
-    --IV:#48e0a0;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;}
-  html,body{height:100%;overflow:hidden;}
-  body{
-    font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;
-    background:var(--bg0);color:var(--txt);
-    -webkit-font-smoothing:antialiased;user-select:none;
-  }
-  #stage{position:fixed;inset:0;}
-  #stage canvas{display:block;cursor:grab;}
-  #stage canvas:active{cursor:grabbing;}
-  #labels{position:fixed;inset:0;pointer-events:none;z-index:5;}
-
-  /* ============ 顶栏 ============ */
-  #hud{
-    position:fixed;top:0;left:0;right:0;height:52px;z-index:20;
-    display:flex;align-items:center;gap:14px;padding:0 16px;
-    background:linear-gradient(180deg,rgba(6,14,26,.96),rgba(6,14,26,.55));
-    border-bottom:1px solid var(--line);backdrop-filter:blur(6px);
-  }
-  .brand{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
-  .logo{
-    width:28px;height:28px;border-radius:7px;flex:0 0 auto;
-    background:radial-gradient(circle at 32% 28%,#5fe8ff,#1173c4 62%,#0a3f74);
-    box-shadow:0 0 12px rgba(47,212,255,.55);
-    display:flex;align-items:center;justify-content:center;
-    font-size:14px;font-weight:700;color:#03121f;
-  }
-  .brand h1{font-size:15px;font-weight:700;letter-spacing:.5px;white-space:nowrap;}
-  .brand h1 span{color:var(--accent);}
-  .brand .sub{font-size:10px;color:var(--txt2);letter-spacing:1.4px;}
-
-  .vsep{width:1px;height:26px;background:var(--line);flex:0 0 auto;}
-  .chips{display:flex;gap:8px;align-items:center;flex:0 0 auto;}
-  .chip{
-    font-size:11px;padding:4px 9px;border-radius:5px;
-    background:rgba(28,138,214,.14);border:1px solid var(--line);
-    color:#bcd8ef;white-space:nowrap;
-  }
-  .chip b{color:#fff;font-weight:600;}
-  .chip .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--IV);
-    margin-right:5px;box-shadow:0 0 7px var(--IV);animation:blink 1.6s infinite;}
-  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
-
-  #viewbar{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:nowrap;}
-  .vbtn, .tb{
-    font-size:11.5px;padding:5px 11px;border-radius:6px;cursor:pointer;
-    background:rgba(20,44,74,.72);border:1px solid var(--line);color:#bfd9f0;
-    transition:.16s;white-space:nowrap;font-family:inherit;
-  }
-  .vbtn:hover,.tb:hover{background:rgba(35,90,145,.85);color:#fff;border-color:var(--accent);}
-  .vbtn.on{background:linear-gradient(180deg,#1e7cc0,#11558f);color:#fff;border-color:var(--accent);
-    box-shadow:0 0 10px rgba(47,212,255,.35) inset;}
-
-  /* ============ 侧栏 ============ */
-  .side{
-    position:fixed;top:56px;bottom:74px;z-index:18;overflow-y:auto;overflow-x:hidden;
-    background:var(--panel);border:1px solid var(--line);border-radius:12px;
-    backdrop-filter:blur(9px);box-shadow:0 10px 34px rgba(0,0,0,.5);
-    scrollbar-width:thin;scrollbar-color:rgba(64,148,214,.5) transparent;
-  }
-  .side::-webkit-scrollbar{width:5px;}
-  .side::-webkit-scrollbar-thumb{background:rgba(64,148,214,.45);border-radius:3px;}
-  #left{left:12px;width:272px;}
-  #right{right:12px;width:388px;}
-
-  .sec{padding:11px 13px;border-bottom:1px solid var(--line2);}
-  .sec:last-child{border-bottom:none;}
-  .sec-h{
-    font-size:11.5px;font-weight:700;color:#8fd4ff;letter-spacing:.6px;
-    display:flex;align-items:center;gap:7px;margin-bottom:9px;
-  }
-  .sec-h::before{content:"";width:3px;height:12px;border-radius:2px;
-    background:linear-gradient(180deg,var(--accent),#1163a5);}
-  .sec-h .tail{margin-left:auto;font-size:10px;color:var(--txt2);font-weight:400;}
-
-  .kvs{display:flex;flex-direction:column;gap:5px;font-size:11.5px;}
-  .kv{display:flex;justify-content:space-between;gap:8px;}
-  .kv span{color:var(--txt2);}
-  .kv b{color:#e8f4ff;font-weight:600;}
-
-  /* SHI 仪表 */
-  .shi-wrap{display:flex;align-items:center;gap:14px;}
-  #shiGauge{flex:0 0 auto;}
-  .shi-meta{flex:1;min-width:0;}
-  .shi-val{font-size:27px;font-weight:700;line-height:1;color:#ffd633;
-    text-shadow:0 0 16px rgba(255,214,51,.4);}
-  .shi-val small{font-size:11px;color:var(--txt2);font-weight:400;margin-left:3px;}
-  .shi-tag{display:inline-block;margin-top:6px;font-size:11px;padding:2px 9px;border-radius:20px;
-    background:rgba(255,214,51,.16);border:1px solid rgba(255,214,51,.5);color:#ffd633;}
-  .shi-desc{font-size:10.5px;color:var(--txt2);margin-top:7px;line-height:1.55;}
-
-  /* 统计条 */
-  .stat{display:flex;flex-direction:column;gap:7px;font-size:11.5px;}
-  .stat-row{display:flex;align-items:center;gap:8px;}
-  .stat-row .nm{width:52px;color:var(--txt2);font-size:11px;flex:0 0 auto;}
-  .bar{flex:1;height:7px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;}
-  .bar i{display:block;height:100%;border-radius:4px;transition:width .5s;}
-  .stat-row .vl{width:20px;text-align:right;font-weight:600;}
-
-  /* 病害 -->
-  #defectList{display:flex;flex-direction:column;gap:5px;max-height:212px;overflow-y:auto;}
-  .d-card{
-    display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;cursor:pointer;
-    background:rgba(18,38,62,.6);border:1px solid rgba(64,148,214,.16);transition:.15s;
-  }
-  .d-card:hover{background:rgba(32,74,116,.8);border-color:rgba(47,212,255,.5);transform:translateX(2px);}
-  .d-card.sel{background:rgba(38,104,160,.85);border-color:var(--accent);
-    box-shadow:0 0 12px rgba(47,212,255,.28);}
-  .d-card.dim{opacity:.22;filter:grayscale(.7);}
-  .lv{width:20px;height:20px;border-radius:5px;flex:0 0 auto;display:flex;
-    align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#12202f;}
-  .d-main{flex:1;min-width:0;}
-  .d-t1{font-size:11.5px;font-weight:600;color:#e6f2ff;display:flex;justify-content:space-between;gap:6px;}
-  .d-t1 em{font-style:normal;font-size:10px;color:var(--txt2);font-weight:400;flex:0 0 auto;}
-  .d-t2{font-size:10px;color:var(--txt2);margin-top:2px;display:flex;justify-content:space-between;gap:6px;}
-  .d-t2 .conf{color:#6fe0c0;}
-
-  /* 过滤 */
-  .filters{display:flex;flex-wrap:wrap;gap:5px;}
-  .f{
-    font-size:11px;padding:3px 8px;border-radius:20px;cursor:pointer;transition:.15s;
-    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);color:#a9c4dc;
-  }
-  .f:hover{border-color:var(--accent);color:#fff;}
-  .f.on{background:rgba(47,212,255,.2);border-color:var(--accent);color:#fff;}
-
-  /* 按钮 */
-  .btns{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
-  .btn{
-    font-size:11.5px;padding:8px 6px;border-radius:7px;cursor:pointer;text-align:center;
-    background:linear-gradient(180deg,rgba(31,86,138,.9),rgba(16,48,80,.9));
-    border:1px solid var(--line);color:#d5e8f8;transition:.16s;font-family:inherit;
-  }
-  .btn:hover{border-color:var(--accent);color:#fff;box-shadow:0 0 12px rgba(47,212,255,.3);}
-  .btn.wide{grid-column:1/-1;}
-  .btn.pri{background:linear-gradient(180deg,#1f86c9,#0d4f86);border-color:var(--accent);color:#fff;font-weight:600;}
-
-  /* 开关 */
-  .toggles{display:flex;flex-direction:column;gap:7px;}
-  .tg{display:flex;align-items:center;gap:9px;font-size:11.5px;cursor:pointer;color:#c2d8ea;}
-  .tg input{display:none;}
-  .sw{width:32px;height:17px;border-radius:10px;background:rgba(255,255,255,.13);
-    position:relative;transition:.2s;flex:0 0 auto;}
-  .sw::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;
-    background:#7f9bb4;transition:.2s;}
-  .tg input:checked + .sw{background:rgba(47,212,255,.35);}
-  .tg input:checked + .sw::after{left:17px;background:var(--accent);box-shadow:0 0 9px var(--accent);}
-  /* ---- 病害清单（移植自病害展示 Demo） ---- */
-  .dlist{max-height:212px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;}
-  .dlist::-webkit-scrollbar{width:5px;}
-  .dlist::-webkit-scrollbar-thumb{background:rgba(64,148,214,.45);border-radius:3px;}
-  .d-row{display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:6px;cursor:pointer;
-    background:rgba(18,38,62,.6);border:1px solid rgba(64,148,214,.16);font-size:12px;color:#bfd9f0;transition:.15s;}
-  .d-row:hover{background:rgba(32,74,116,.8);border-color:rgba(47,212,255,.5);transform:translateX(2px);}
-  .d-row.sel{background:rgba(38,104,160,.85);border-color:var(--accent);}
-  .d-row .did{font-family:Consolas,monospace;color:#fff;width:46px;flex:0 0 auto;}
-  .d-row .dtp{flex:1;}
-  .d-row .drg{font-family:Consolas,monospace;color:#8fb3d4;font-size:11px;flex:0 0 auto;}
-  .d-row .go{font-size:11px;color:#7fd4ff;border:1px solid rgba(125,211,252,.4);background:transparent;
-    border-radius:4px;padding:1px 7px;cursor:pointer;flex:0 0 auto;}
-  .d-row .go:hover{background:rgba(125,211,252,.18);}
-  /* ---- 自由飞行 HUD（移植） ---- */
-  #flyHud{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:30;display:none;
-    padding:8px 22px;border-radius:9px;background:rgba(6,15,26,.92);border:1px solid var(--accent);
-    color:#cdf1ff;font-size:13px;letter-spacing:.5px;pointer-events:none;box-shadow:0 4px 22px rgba(0,0,0,.5);}
-  #flyHud.on{display:block;}
-  .tg:hover{color:#fff;}
-
-  /* 切片 */
-  .slice-row{display:flex;align-items:center;gap:9px;font-size:11px;color:var(--txt2);margin-top:8px;}
-  input[type=range]{-webkit-appearance:none;flex:1;height:4px;border-radius:3px;
-    background:linear-gradient(90deg,var(--accent2),var(--accent));outline:none;}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
-    border-radius:50%;background:#fff;cursor:pointer;box-shadow:0 0 8px var(--accent);}
-  input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-radius:50%;
-    background:#fff;cursor:pointer;}
-
-  /* 详情 */
-  #detail .empty{font-size:11.5px;color:var(--txt2);line-height:1.75;text-align:center;padding:18px 4px;}
-  .dh{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
-  .dh .lv{width:26px;height:26px;font-size:13px;border-radius:7px;}
-  .dh .t{font-size:14px;font-weight:700;color:#fff;}
-  .dh .s{font-size:10px;color:var(--txt2);letter-spacing:.5px;}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;}
-  .cell{background:rgba(255,255,255,.045);border:1px solid var(--line2);border-radius:7px;padding:7px 8px;}
-  .cell .k{font-size:9.5px;color:var(--txt2);letter-spacing:.3px;}
-  .cell .v{font-size:13px;font-weight:600;color:#eaf6ff;margin-top:2px;}
-  .cell .v small{font-size:9.5px;color:var(--txt2);font-weight:400;margin-left:2px;}
-  .advice{margin-top:9px;font-size:11px;line-height:1.7;color:#cfe6f7;
-    background:rgba(47,212,255,.08);border-left:3px solid var(--accent);border-radius:0 7px 7px 0;padding:8px 10px;}
-  .advice b{color:#7fe3ff;}
-  #ringCanvas{width:100%;height:190px;display:block;border-radius:8px;background:rgba(4,12,22,.6);
-    border:1px solid var(--line2);margin-top:4px;}
-  #shiChart{width:100%;height:104px;display:block;}
-
-  /* 底部图例 */
-  #legend{
-    position:fixed;left:296px;right:412px;bottom:10px;height:54px;z-index:18;
-    display:flex;align-items:center;gap:16px;padding:0 16px;overflow:hidden;
-    background:var(--panel);border:1px solid var(--line);border-radius:11px;backdrop-filter:blur(8px);
-  }
-  .lg-group{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
-  .lg-t{font-size:10px;color:var(--txt2);letter-spacing:1px;flex:0 0 auto;}
-  .lg{display:flex;align-items:center;gap:5px;font-size:10.5px;color:#bcd4e8;white-space:nowrap;}
-  .lg i{width:11px;height:11px;border-radius:3px;display:inline-block;flex:0 0 auto;}
-  .lg i.cir{border-radius:50%;}
-  .lg i.dia{transform:rotate(45deg);border-radius:2px;}
-  .vline{width:1px;height:26px;background:var(--line2);flex:0 0 auto;}
-
-  /* 3D 标签 */
-  .lbl{
-    position:absolute;transform:translate(-50%,-50%);pointer-events:none;
-    font-size:10.5px;padding:2px 7px;border-radius:5px;white-space:nowrap;
-    background:rgba(6,16,28,.82);border:1px solid rgba(255,255,255,.28);
-    color:#eaf6ff;backdrop-filter:blur(3px);transition:opacity .2s;
-    font-family:"Microsoft YaHei",sans-serif;
-  }
-  .lbl.lv-I{border-color:var(--I);box-shadow:0 0 10px rgba(255,59,59,.5);}
-  .lbl.lv-II{border-color:var(--II);box-shadow:0 0 9px rgba(255,157,46,.42);}
-  .lbl.lv-III{border-color:var(--III);}
-  .lbl.lv-IV{border-color:var(--IV);}
-  .lbl.sel{background:rgba(47,212,255,.9);color:#04131f;font-weight:700;border-color:#fff;}
-
-  /* 提示 */
-  #tip{
-    position:fixed;z-index:40;pointer-events:none;display:none;
-    background:rgba(8,20,34,.95);border:1px solid var(--accent);border-radius:7px;
-    padding:7px 10px;font-size:11px;color:#e8f6ff;box-shadow:0 6px 20px rgba(0,0,0,.6);max-width:230px;
-  }
-  #tip .h{font-weight:700;color:var(--accent);margin-bottom:3px;}
-  #tip .r{color:#a9c6dd;}
-
-  #loading{
-    position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:14px;background:var(--bg0);
-    transition:opacity .5s;
-  }
-  #loading .ring{width:44px;height:44px;border:3px solid rgba(47,212,255,.2);
-    border-top-color:var(--accent);border-radius:50%;animation:spin .9s linear infinite;}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  #loading p{font-size:12px;color:var(--txt2);letter-spacing:2px;}
-  #loading .err{color:#ff8080;font-size:12px;max-width:520px;text-align:center;line-height:1.7;}
-  .hide{opacity:0!important;pointer-events:none!important;}
-
-  /* ============ 检测车第一视角 HUD ============ */
-  #carHud{
-    position:fixed;left:50%;bottom:76px;width:424px;z-index:19;display:none;
-    transform:translateX(-50%);
-    background:rgba(6,15,26,.90);border:1px solid var(--line);border-radius:11px;
-    padding:9px 11px;backdrop-filter:blur(9px);box-shadow:0 8px 26px rgba(0,0,0,.55);
-  }
-  #carHud.on{display:block;}
-  .ch-top{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
-  .ch-rec{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
-    color:#ff5b5b;letter-spacing:.5px;flex:0 0 auto;}
-  .ch-rec i{width:8px;height:8px;border-radius:50%;background:#ff3b3b;
-    box-shadow:0 0 8px #ff3b3b;animation:blink 1.1s infinite;}
-  .ch-t{font-size:11.5px;font-weight:700;color:#9fe0ff;letter-spacing:.5px;}
-  .ch-sp{margin-left:auto;font-size:10px;color:var(--txt2);}
-  #bscan{width:100%;height:118px;display:block;border-radius:7px;
-    background:#03101c;border:1px solid rgba(64,148,214,.3);}
-  .ch-bar{margin-top:7px;display:flex;align-items:center;gap:8px;font-size:10px;color:var(--txt2);}
-  .ch-bar .track{flex:1;height:6px;border-radius:4px;background:rgba(255,255,255,.08);
-    position:relative;overflow:hidden;}
-  .ch-bar .track i{position:absolute;left:0;top:0;bottom:0;width:0%;
-    background:linear-gradient(90deg,#1c8ad6,#2fd4ff);border-radius:4px;}
-  .ch-bar b{color:#bfe6ff;font-weight:600;min-width:56px;text-align:right;}
-  .ch-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px;}
-  .ch-cell{background:rgba(255,255,255,.045);border:1px solid var(--line2);
-    border-radius:6px;padding:5px 6px;}
-  .ch-cell .k{font-size:9px;color:var(--txt2);}
-  .ch-cell .v{font-size:11.5px;font-weight:600;color:#eaf6ff;margin-top:1px;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .ch-alert{margin-top:7px;font-size:10.5px;padding:5px 8px;border-radius:6px;
-    background:rgba(255,59,59,.14);border:1px solid rgba(255,59,59,.5);color:#ffb3b3;}
-  .ch-alert.quiet{background:rgba(72,224,160,.10);border-color:rgba(72,224,160,.4);color:#8fe8c4;}
-
-  /* 过环闪烁提示 */
-  #ringFlash{
-    position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:19;display:none;
-    font-size:12px;padding:6px 16px;border-radius:20px;letter-spacing:1px;
-    background:rgba(47,212,255,.16);border:1px solid var(--accent);color:#cdf1ff;
-    backdrop-filter:blur(6px);
-  }
-  #ringFlash.on{display:block;}
-
-  @media (max-width:1500px){
-    #left{width:250px;} #right{width:352px;}
-    #legend{left:272px;right:376px;}
-    #carHud{width:360px;bottom:70px;}
-  }
-</style>
-</head>
-<body>
-
-<div id="stage"></div>
-<div id="labels"></div>
-
-<!-- ================= 顶栏 ================= -->
-<div id="hud">
-  <div class="brand">
-    <div class="logo">隧</div>
-    <div>
-      <h1>隧雷智检 · <span>隧道结构三维数字孪生平台</span></h1>
-      <div class="sub">TUNNEL DIGITAL TWIN · GPR BASED HIDDEN DEFECT INSPECTION</div>
-    </div>
-  </div>
-  <div class="vsep"></div>
-  <div class="chips">
-    <div class="chip"><span class="dot"></span>数据链路 <b>在线</b></div>
-    <div class="chip">工点 <b>地铁 4 号线 · 王家湾隧道</b></div>
-    <div class="chip">里程 <b>K3+128 ~ K3+172</b></div>
-    <div class="chip">管片环 <b>980 ~ 1019</b></div>
-    <div class="chip">解译 <b>RCAN + RTM + YOLOv7-AFPN</b></div>
-  </div>
-  <div id="viewbar">
-    <button class="vbtn" data-view="iso">轴测全景</button>
-    <button class="vbtn" data-view="in">隧道内部</button>
-    <button class="vbtn" data-view="cross">横断面剖切</button>
-    <button class="vbtn" data-view="top">俯视展开</button>
-    <button class="vbtn" data-view="crown">拱顶特写</button>
-    <button class="vbtn" data-view="invert">仰拱特写</button>
-    <button class="vbtn" id="btnCarView">检测车第一视角</button>
-    <button class="vbtn" id="btnPause">⏸ 暂停检测（P）</button>
-    <button class="vbtn" id="btnRotate">自动旋转</button>
-  </div>
-</div>
-
-<!-- ================= 左侧栏 ================= -->
-<div class="side" id="left">
-  <div class="sec">
-    <div class="sec-h">工点概况 <span class="tail">检测批次 DT-2024-1118</span></div>
-    <div class="kvs">
-      <div class="kv"><span>隧道类型</span><b>盾构隧道 · 单洞单线</b></div>
-      <div class="kv"><span>衬砌内径 / 管片厚</span><b>5.4 m / 0.35 m</b></div>
-      <div class="kv"><span>检测方式</span><b>机械臂 GPR 车载连续扫描</b></div>
-      <div class="kv"><span>采集时间</span><b>2024-11-18 01:20 ~ 03:05</b></div>
-      <div class="kv"><span>环号定位精度</span><b>±0.15 m（27 维 EKF）</b></div>
-    </div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">结构健康指数 SHI <span class="tail">AHP + 熵权组合赋权</span></div>
-    <div class="shi-wrap">
-      <canvas id="shiGauge" width="150" height="150"></canvas>
-      <div class="shi-meta">
-        <div class="shi-val" id="shiVal">--<small>/100</small></div>
-        <div class="shi-tag" id="shiTag">计算中</div>
-        <div class="shi-desc" id="shiDesc"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">病害类型分布 <span class="tail">共 <b id="dTotal">0</b> 处</span></div>
-    <div class="stat" id="statBars"></div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">病害等级筛选 <span class="tail">点选定位</span></div>
-    <div class="filters" id="lvFilters"></div>
-    <div class="filters" id="typeFilters" style="margin-top:7px;"></div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">病害清单 <span class="tail">点击行选中 · 「定位」飞行</span></div>
-    <div class="dlist" id="defectList"></div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">显示控制</div>
-    <div class="toggles">
-      <label class="tg"><input type="checkbox" id="ckShell" checked><span class="sw"></span>管片衬砌（透视）</label>
-      <label class="tg"><input type="checkbox" id="ckDefect" checked><span class="sw"></span>隐蔽病害体（高亮）</label>
-      <label class="tg"><input type="checkbox" id="ckRebar" checked><span class="sw"></span>钢筋网（双层）</label>
-      <label class="tg"><input type="checkbox" id="ckGrout" checked><span class="sw"></span>壁后注浆层</label>
-      <label class="tg"><input type="checkbox" id="ckGround" checked><span class="sw"></span>地层模型</label>
-      <label class="tg"><input type="checkbox" id="ckLabel" checked><span class="sw"></span>病害标注引线（仅 I/II 级）</label>
-      <label class="tg"><input type="checkbox" id="ckLabelAll"><span class="sw"></span>标注全部病害</label>
-      <label class="tg"><input type="checkbox" id="ckCar" checked><span class="sw"></span>检测车 / 机械臂</label>
-      <label class="tg"><input type="checkbox" id="ckRay"><span class="sw"></span>GPR 电磁波射线</label>
-      <label class="tg"><input type="checkbox" id="ckStars" checked><span class="sw"></span>星空背景</label>
-      <label class="tg"><input type="checkbox" id="ckCity" checked><span class="sw"></span>城市天际线</label>
-      <label class="tg"><input type="checkbox" id="ckProfile"><span class="sw"></span>断面偏差可视化（实测断面）</label>
-    </div>
-    <div class="slice-row">
-      <span>纵剖切面</span>
-      <input type="range" id="slice" min="0" max="100" value="100">
-      <span id="sliceTxt" style="width:58px;text-align:right;">关</span>
-    </div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">操作</div>
-    <div class="btns">
-      <div class="btn wide pri" id="btnCarView2">▶ 进入检测车第一视角</div>
-      <div class="btn wide" id="btnPause2">⏸ 暂停 / 继续检测（P）</div>
-      <div class="btn wide" id="btnFly">🚁 自由飞行漫游（G 键）</div>
-      <div class="btn" id="btnNext">下一处病害</div>
-      <div class="btn" id="btnFit">重置视角</div>
-      <div class="btn" id="btnIsoCut">剖切总览</div>
-      <div class="btn" id="btnAlarm">预警清单</div>
-      <div class="btn wide" id="btnReport">导出检测评估报告</div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= 右侧栏 ================= -->
-<div class="side" id="right">
-  <div class="sec" id="detail">
-    <div class="sec-h">病害详情 <span class="tail" id="dIdx">未选中</span></div>
-    <div class="empty" id="detailEmpty">
-      鼠标左键拖动可 360° 翻转隧道<br>
-      滚轮缩放 · 右键拖动平移<br>
-      点击隧道内的病害体查看量化指标<br>
-      <span style="color:#7fd4ff">点「检测车第一视角」可随车遍历整条隧道</span>
-    </div>
-    <div id="detailBody" style="display:none;"></div>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">环向展开定位 <span class="tail">拱顶 = 0°</span></div>
-    <canvas id="ringCanvas" width="720" height="380"></canvas>
-  </div>
-
-  <div class="sec">
-    <div class="sec-h">SHI 多期次演化 <span class="tail">劣化速率</span></div>
-    <canvas id="shiChart" width="720" height="230"></canvas>
-    <div class="kvs" style="margin-top:9px;">
-      <div class="kv"><span>劣化速率 R</span><b id="rateVal">--</b></div>
-      <div class="kv"><span>风险指数 RI</span><b>0.71（高）</b></div>
-      <div class="kv"><span>建议复检周期</span><b>3 个月 / 次</b></div>
-    </div>
-  </div>
-</div>
-
-<!-- ================= 底部图例 ================= -->
-<div id="legend">
-  <div class="lg-group">
-    <span class="lg-t">病害等级</span>
-    <span class="lg"><i style="background:#ff3b3b"></i>I 严重</span>
-    <span class="lg"><i style="background:#ff9d2e"></i>II 较重</span>
-    <span class="lg"><i style="background:#ffd633"></i>III 一般</span>
-    <span class="lg"><i style="background:#48e0a0"></i>IV 轻微</span>
-  </div>
-  <div class="vline"></div>
-  <div class="lg-group">
-    <span class="lg-t">病害类型</span>
-    <span class="lg"><i class="cir" style="background:#ff2d55"></i>空气空洞</span>
-    <span class="lg"><i class="cir" style="background:#3fd0ff"></i>充水/富水</span>
-    <span class="lg"><i class="cir" style="background:#ffb020"></i>脱空</span>
-    <span class="lg"><i class="cir" style="background:#c07b3a"></i>不密实</span>
-    <span class="lg"><i class="dia" style="background:#b44cff"></i>钢筋异常</span>
-    <span class="lg"><i class="dia" style="background:#ffe14d"></i>裂缝/渗漏</span>
-  </div>
-  <div class="vline"></div>
-  <div class="lg-group">
-    <span class="lg-t">结构</span>
-    <span class="lg"><i style="background:#7c8b97"></i>管片衬砌</span>
-    <span class="lg"><i style="background:#4a7a5e"></i>注浆层</span>
-    <span class="lg"><i style="background:#8c7048"></i>围岩</span>
-  </div>
-</div>
-
-<div id="tip"></div>
-
-<!-- ================= 检测车第一视角 HUD ================= -->
-<div id="carHud">
-  <div class="ch-top">
-    <span class="ch-rec"><i></i><span class="rec-txt">REC</span></span>
-    <span class="ch-t">检测车第一视角 · 探地雷达实时采集</span>
-    <span class="ch-sp">GPR 400 MHz</span>
-  </div>
-  <canvas id="bscan" width="800" height="236"></canvas>
-  <div class="ch-bar">
-    <span>里程</span>
-    <span class="track"><i id="chBar"></i></span>
-    <b id="chMile">K3+128</b>
-  </div>
-  <div class="ch-grid">
-    <div class="ch-cell"><div class="k">当前环号</div><div class="v" id="chRing">980</div></div>
-    <div class="ch-cell"><div class="k">作业速度</div><div class="v" id="chSpeed">3.6 m/s</div></div>
-    <div class="ch-cell"><div class="k">已扫里程</div><div class="v" id="chScan">0.0 m</div></div>
-    <div class="ch-cell"><div class="k">机械臂</div><div class="v" id="chArm">3 臂扫查</div></div>
-    <div class="ch-cell"><div class="k">主频 / 时窗</div><div class="v">400MHz / 30ns</div></div>
-  </div>
-  <div class="ch-grid" style="margin-top:6px">
-    <div class="ch-cell"><div class="k">当前环椭圆度</div><div class="v" id="chOval">—</div></div>
-    <div class="ch-cell"><div class="k">本环环缝错台</div><div class="v" id="chJoint">—</div></div>
-    <div class="ch-cell" style="grid-column:span 3"><div class="k">臂端贴壁靶面半径 / 断面状态</div><div class="v" id="chProf">—</div></div>
-  </div>
-  <div class="ch-alert quiet" id="chAlert">本段未发现异常回波</div>
-</div>
-
-<div id="ringFlash"></div>
-
-<div id="flyHud">自由飞行：W/S 前后 · A/D 左右 · Q/E 升降 · Shift 加速 · 按住左键拖动转视角 · G 退出</div>
-
-<div id="loading">
-  <div class="ring"></div>
-  <p>正在加载三维孪生场景…</p>
-  <div class="err" id="loadErr"></div>
-</div>
-
-<script src="vendor/three.min.js"></script>
-<script>
 /* ==========================================================================
    隧雷智检 · 隧道结构三维数字孪生平台
    --------------------------------------------------------------------------
@@ -534,12 +6,18 @@
    ========================================================================== */
 (function () {
 'use strict';
+// 场景仅由新版模块承载；业务数据和控制入口由工作台统一提供。
+if (window.parent === window) return;
+var embedded = true;
+var hostTask = null, hostMuted = false;
+document.body.classList.add('embedded');
+
 
 // ------------------------------------------------------------------ 环境检查
 var loadingEl = document.getElementById('loading');
 var errEl = document.getElementById('loadErr');
 if (typeof THREE === 'undefined') {
-  errEl.innerHTML = '三维引擎 three.js 未能加载。<br>请确认 <b>vendor/three.min.js</b> 与本文件在同一目录下，或联网后重试。';
+  errEl.innerHTML = '三维引擎 three.js 未能加载。<br>请保留平台目录中的 <b>vendor/three.min.js</b> 文件，并重新启动工作台。';
   document.querySelector('#loading .ring').style.display = 'none';
   return;
 }
@@ -1086,7 +564,7 @@ function makeHalo(color, radius){
     new THREE.MeshBasicMaterial({
       color: color, transparent:true, opacity:0.30,
       side: THREE.BackSide, depthWrite:false, depthTest:false,
-      blending: THREE.AdditiveBlending, renderOrder: 20
+      blending: THREE.AdditiveBlending
     })
   );
 }
@@ -1255,7 +733,7 @@ function layerRadius(d){
 var carArmUnits = [];            // 各机械臂的可动部件，供逐帧动画驱动
 var carArmIK = [];               // 各臂的名义圆形解序列（校验 / 初始姿态）
 var carArmTip = [];              // 各臂的弧长位置表（动画用）
-var carArmTipR = [0, 0, 0];      // 各臂臂端的**平滑后靶面半径**（跟踪实测断面）
+var carArmTipR = [0, 0, 0];      // 各臂臂端的**平滑后靶面半径**（跟踪参数化演示断面）
 // 机械臂布置
 // 车体局部 +Z 为行进方向；大臂沿 +Z 建模，靠 rotation.x 抬升。
 // 绕 X 旋转 α 时 (0,0,L) → (0, −L·sinα, L·cosα)，故 **α 取负值 = 臂上抬**。
@@ -1270,7 +748,7 @@ var carArmTipR = [0, 0, 0];      // 各臂臂端的**平滑后靶面半径**（�
 // 不再是简单的正弦摆动 —— 天线阵始终贴着管片内弧面移动。
 var carCfg = {
   deckY:     -0.78,              // 平板车底板（车架平台面）高度
-  deckZ0:    -1.15,              // 底板纵向范围（尾 / 头）
+  deckZ0:    -1.20,              // 底板纵向范围（尾 / 头）
   deckZ1:     1.20,
   mastZ:      0.65,              // 立柱所在纵向位置
   shoulderY:  0.10,              // 肩关节高度
@@ -1329,7 +807,7 @@ function buildArmIK(unit){
 }
 
 // ==================================================================== 隧道断面实测模型
-// 目的：把"理想圆形断面"换成**随环号变化的实测断面**，使机械臂的贴壁靶面
+// 目的：把"理想圆形断面"换成**随环号变化的参数化演示断面**，使机械臂的贴壁靶面
 //       带上真实盾构隧道才有的两类几何偏差：
 //         ① 椭圆度（ovality）——同一环内半径随环向角变化，拱顶/仰拱略压扁、两侧略外扩
 //         ② 环缝错台（joint offset）——相邻环在环缝处的径向突变
@@ -1426,7 +904,7 @@ var TunnelProfile = (function(){
 
 // ---------------------------------------------------------------- 臂端沿弧位置
 // 每条臂生成按弧长积分的等步距位置表（弧长/方位角），使臂端沿断面的线速度
-// 均匀（理想圆上 az 与弧长成正比，实测断面下略有差异，用弦长积分修正）。
+// 均匀（理想圆上 az 与弧长成正比，参数化演示断面下略有差异，用弦长积分修正）。
 function buildArmTip(unit){
   var seq0 = buildArmIK(unit);            // 名义圆形下的解，仅用于取 az 序列
   var xs = [0], azs = [seq0[0].az], L = 0;
@@ -1546,7 +1024,7 @@ function buildArm(unit, mats){
              emissive: new THREE.Color(0x1b6d8f), emissiveIntensity:0.9 })
   };
 
-  var W = 1.30, deckY = carCfg.deckY;
+  var W = 1.40, deckY = carCfg.deckY;
   var zc = (carCfg.deckZ0 + carCfg.deckZ1) / 2;
   var zl = carCfg.deckZ1 - carCfg.deckZ0;
   var roadY = -(PT.Ri - 0.30);             // 道床面高度（轮子落在此面上）
@@ -1682,7 +1160,7 @@ function buildArm(unit, mats){
 })();
 
 // ==================================================================== 断面偏差可视化
-// 在名义圆形内表面之外，叠加一层"实测断面"线框：
+// 在名义圆形内表面之外，叠加一层"参数化演示断面"线框：
 //   逐环按 TunnelProfile 的半径表生成一圈闭合折线，颜色按径向偏差映射
 //   （暖色=凸出/错台，冷色=压扁），可直观看出椭圆度与环缝错台。
 var gProfile = group('profile');
@@ -2075,6 +1553,11 @@ function drawGauge(){
 })();
 
 function isVisible(d){
+  // 车载雷达和附近病害提示采用工作台的同一筛选结果。
+  if (embedded) {
+    var item = defectMeshes.find(function(dm){ return dm.def.id === d.id; });
+    return !!item && item.group.visible;
+  }
   return state.lvOn[d.L] && state.typeOn[d.T];
 }
 function refreshVisibility(){
@@ -2497,6 +1980,7 @@ var flashTimer = 0;
 function toggleFP(force){
   var want = (force === undefined) ? !fp.on : !!force;
   if (want === fp.on) return;
+  if (want && fly.on) toggleFly(false);
   fp.on = want;
   fp.drag = false;
   document.getElementById('btnCarView').classList.toggle('on', fp.on);
@@ -2563,10 +2047,10 @@ var flyHudEl = document.getElementById('flyHud');
 function toggleFly(force){
   var want = (force === undefined) ? !fly.on : !!force;
   if (want === fly.on) return;
+  if (want && fp.on) toggleFP(false);
   fly.on = want;
   var btn = document.getElementById('btnFly');
   if (fly.on){
-    if (fp.on) toggleFP(false);                 // 与第一视角互斥
     orbit.autoRotate = false; syncRotBtn();
     camTween = null;
     // 以当前相机姿态初始化 yaw / pitch
@@ -2752,7 +2236,7 @@ function hudUpdate(carX){
   var span = X_END - PT.x0;
   var prog = clamp((carX - PT.x0) / span, 0, 1);
   chBarEl.style.width = (prog * 100).toFixed(1) + '%';
-  chMileEl.textContent = 'K3+' + String(Math.round(128 + prog * 44));
+  chMileEl.textContent = 'K3+' + String(Math.round(128 + prog * 48));
   var ringNo = clamp(Math.floor((carX - PT.x0) / PT.segLen) + PT.ring0,
                      PT.ring0, PT.ring0 + PT.nRing - 1);
   chRingEl.textContent = String(ringNo);
@@ -2885,7 +2369,7 @@ function exportReport(){
   lines.push('隧道结构健康检测评估报告（自动生成初稿）');
   lines.push('='.repeat(64));
   lines.push('工点名称：地铁 4 号线 · 王家湾隧道');
-  lines.push('检测里程：K3+128 ~ K3+172　　管片环号：980 ~ 1019');
+  lines.push('检测里程：K3+128 ~ K3+176　　管片环号：980 ~ 1019');
   lines.push('检测方式：机械臂探地雷达车载连续扫描（5 km/h）');
   lines.push('解译算法：RCAN 钢筋杂波抑制 → RTM 逆时偏移成像 → YOLOv7-AFPN 病害识别');
   lines.push('报告生成时间：' + now.toLocaleString('zh-CN'));
@@ -2954,7 +2438,7 @@ function updateLabels(){
   var vis = gDefect.visible && show;
   defectMeshes.forEach(function(dm){
     // 默认仅标注 I / II 级病害，避免标注互相遮挡；选中项始终显示
-    var important = showAll || dm.def.L === 'I' || dm.def.L === 'II' || state.sel === dm;
+    var important = showAll || (embedded ? state.sel === dm : (dm.def.L === 'I' || dm.def.L === 'II' || state.sel === dm));
     if (!vis || !dm.group.visible || !important){
       dm.lbl.style.display = 'none';
       return;
@@ -2963,7 +2447,7 @@ function updateLabels(){
     tmpV.project(camera);
     var behind = tmpV.z > 1;
     var d2c = camera.position.distanceTo(dm.pos.clone().add(world.position));
-    if (behind || d2c > 46){
+    if (behind || d2c > (embedded ? 200 : 46)){
       dm.lbl.style.opacity = '0';
       dm.lbl.style.display = 'none';
       return;
@@ -2971,7 +2455,7 @@ function updateLabels(){
     dm.lbl.style.display = '';
     dm.lbl.style.left = (tmpV.x * 0.5 + 0.5) * window.innerWidth + 'px';
     dm.lbl.style.top  = (-tmpV.y * 0.5 + 0.5) * window.innerHeight + 'px';
-    dm.lbl.style.opacity = String(clamp(1.25 - d2c / 46, 0.15, 1));
+    dm.lbl.style.opacity = String(embedded ? .95 : clamp(1.25 - d2c / 46, 0.15, 1));
   });
 }
 
@@ -3041,18 +2525,18 @@ function frame(){
     bk.mesh.material.opacity = 0.12 + 0.88 * bs * bs * bs;
   }
 
-  // 多机械臂贴壁扫掠动画（实测断面版）
+  // 多机械臂贴壁扫掠动画（参数化演示断面版）
   // 关节角逐帧由 IK 解算，靶面半径取自 TunnelProfile —— 随**环号**与**环向角**
   // 变化，因此臂端会跟着椭圆度起伏、并在过环缝时被错台"顶起"或"让开"。
   // 半径经一阶低通滤波跟踪，避免环缝处关节角瞬变，同时保留真实的阶梯跟随感。
-  var carXNow = car ? car.position.x : PT.x0;
+  var carXNow = gCar.userData.car ? gCar.userData.car.position.x : PT.x0;
   for (var ai = 0; ai < carArmUnits.length; ai++){
     var A = carArmUnits[ai], cfg = A.userData.cfg, tip = carArmTip[ai];
     if (tip){
       // 三角波：0→1→0 往返，端点不跳变
       var u = (tp * carCfg.scanRate + cfg.phase) % 1;
       u = u < 0.5 ? u * 2 : (1 - u) * 2;
-      var az = tipAzAt(cfg, tip, u);
+      var az = hostTask ? ((hostTask.scanStart + (hostTask.scanEnd-hostTask.scanStart)*(ai+u)/3)*Math.PI/180) : tipAzAt(cfg, tip, u);
       // 臂端略前置于车体（扫的是即将进入的环），使"过环缝"过程可见
       var ringNow = PT.ring0 + (carXNow - PT.x0 + carCfg.scanLead) / PT.segLen;
       var rTarget = TunnelProfile.radiusAt(ringNow, az * 180 / Math.PI);
@@ -3094,7 +2578,10 @@ function frame(){
   var car = gCar.userData.car;
   if (car && gCar.visible){
     var span = X_END - PT.x0;
-    if (fp.on){
+    if (hostTask){
+      car.position.x = clamp(hostTask.progress,0,1)*48;
+      if (fp.on){ fp.dist=car.position.x; bscanDraw(car.position.x,tp);hudUpdate(car.position.x);fpCamera(tp); }
+    } else if (fp.on){
       if (!carPaused) car.position.x += fp.speed * dt;      // 暂停时车停住
       if (car.position.x > X_END){ car.position.x = PT.x0 + 0.5; bscanInit(); }
       fp.dist = car.position.x - PT.x0;
@@ -3139,6 +2626,75 @@ window.addEventListener('resize', function(){
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+
+// SLZJ_BRIDGE_START -- 新版工作台是评估与业务状态的唯一来源。
+var bridgeRiskColors={I:'#ff787f',II:'#efb65d',III:'#e1ce7a',IV:'#56d9b1'};
+var riskGroup=new THREE.Group(), coverageGroup=new THREE.Group();world.add(riskGroup,coverageGroup);
+var obstacleMesh=new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0xf4a74b,roughness:.8}));
+obstacleMesh.visible=false;world.add(obstacleMesh);
+var obstacleOutline=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.04,1.04,1.04)),new THREE.LineBasicMaterial({color:0xffd694}));obstacleMesh.add(obstacleOutline);
+var envelope=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.4,.6,2.4)),new THREE.LineBasicMaterial({color:0x56d9b1,transparent:true,opacity:.6}));
+envelope.visible=embedded;envelope.position.set(0,-1.7,0);gCar.userData.car.add(envelope);
+var coverMat=new THREE.MeshBasicMaterial({color:0x4acaac,transparent:true,opacity:.28,depthWrite:false,side:THREE.DoubleSide});
+var coverageMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,.7),coverMat);coverageMesh.rotation.x=-Math.PI/2;coverageMesh.position.y=-2.37;coverageGroup.add(coverageMesh);
+var grid=new THREE.GridHelper(90,45,0x233d50,0x122c3d);grid.position.set(24,-2.52,0);grid.material.transparent=true;grid.material.opacity=.22;grid.visible=embedded;scene.add(grid);
+var bridgeOriginal={};defectMeshes.forEach(function(dm){bridgeOriginal[dm.def.id]={diameter:dm.def.d,scale:dm.mesh.scale.clone(),haloScale:dm.haloScale0.clone()};});
+function hostSend(type,data){if(!embedded||hostMuted)return;parent.postMessage(Object.assign({channel:'slzj',type:type},data||{}),location.protocol==='file:'?'*':location.origin);}
+var oldSelect=select;select=function(dm){oldSelect(dm);if(dm)hostSend('selected',{id:dm.def.id});};
+function bridgeFocus(dm){if(fp.on)toggleFP(false);if(fly.on)toggleFly(false);releaseCut();camTween={t:0,f:{target:orbit.target.clone(),theta:orbit.theta,phi:orbit.phi,dist:orbit.dist},t2:{target:dm.pos.clone(),theta:1.05,phi:1.10,dist:7}};}
+function rebuildRisk(defs){while(riskGroup.children.length){var m=riskGroup.children.pop();m.geometry.dispose();m.material.dispose();}for(var x=0;x<48;x+=6){var rs=defs.filter(function(d){return d.position.x>=x&&d.position.x<x+6&&d.review!=='rejected';}).map(function(d){return ['I','II','III','IV'].indexOf(d.risk);});var level=['I','II','III','IV'][Math.min.apply(null,rs.concat([3]))];var mat=new THREE.MeshBasicMaterial({color:bridgeRiskColors[level],transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false});var ring=new THREE.Mesh(new THREE.CylinderGeometry(3.18,3.18,5.8,56,1,true),mat);ring.rotation.z=Math.PI/2;ring.position.x=x+3;riskGroup.add(ring);}}
+window.addEventListener('message',function(event){
+ if(!embedded||event.source!==parent||(location.protocol==='file:'?['null','file://'].indexOf(event.origin)<0:event.origin!==location.origin))return;
+ var msg=event.data;if(!msg||msg.channel!=='slzj')return;hostMuted=true;
+ try{
+  if(msg.type==='sync'){
+   var defs=Array.isArray(msg.defects)?msg.defects:[];
+   defectMeshes.forEach(function(dm){var d=defs.find(function(x){return x.id===dm.def.id;});dm.group.visible=!!d;if(!d)return;
+    var target=new THREE.Vector3(d.position.x,d.position.y,d.position.z),delta=target.clone().sub(dm.pos);
+    dm.group.children.forEach(function(ch){if(ch.isLine&&!ch.isLineSegments&&ch.geometry.attributes.position){var ar=ch.geometry.attributes.position;for(var i=0;i<ar.count;i++)ar.setXYZ(i,ar.getX(i)+delta.x,ar.getY(i)+delta.y,ar.getZ(i)+delta.z);ar.needsUpdate=true;ch.geometry.computeBoundingSphere();}else ch.position.add(delta);});
+    dm.pos.copy(target);dm.out.add(delta);
+    var base=bridgeOriginal[d.id],ratio=d.diameter/base.diameter;dm.mesh.scale.copy(base.scale).multiplyScalar(ratio);dm.haloScale0.copy(base.haloScale).multiplyScalar(ratio);
+    dm.def.ring=d.ring;dm.def.az=d.angle;dm.def.L=d.risk;dm.def._score=d.score;dm.def.d=d.diameter;dm.def.h=d.depth;dm.def.Lm=d.length;dm.def.S=d.area;dm.def.C=d.confidence;
+    var col=bridgeRiskColors[d.risk];dm.mesh.material.color.set(col);if(dm.mesh.material.emissive)dm.mesh.material.emissive.set(col);dm.halo.material.color.set(col);
+    dm.lbl.textContent=d.id+' · '+TYPE[dm.def.T].name;dm.lbl.style.color=col;dm.lbl.className='lbl lv-'+d.risk;
+   });
+   rebuildRisk(defs);var selected=defectMeshes.find(function(dm){return dm.def.id===msg.selectedId&&dm.group.visible;});select(selected||null);SHI=Number(msg.shi)||0;
+  }
+  if(msg.type==='select'){var dm=defectMeshes.find(function(d){return d.def.id===msg.id&&d.group.visible;});if(dm){select(dm);bridgeFocus(dm);}}
+  if(msg.type==='view'){if(fp.on)toggleFP(false);setView(msg.view,true);orbit.apply();}
+  if(msg.type==='layer'){var layerMap={shell:gShell,defect:gDefect,rebar:gRebar,grout:gGrout,ground:gGround,car:gCar,ray:gRay,risk:riskGroup,profile:gProfile,stars:bgStars,city:bgCity,coverage:coverageGroup};if(layerMap[msg.name])layerMap[msg.name].visible=!!msg.visible;if(msg.name==='hud')document.body.classList.toggle('no-hud',!msg.visible);if(msg.name==='labelsAll')document.getElementById('ckLabelAll').checked=!!msg.visible;if(msg.name==='labels'){document.getElementById('ckLabel').checked=!!msg.visible;labelLayer.style.display=msg.visible?'':'none';}}
+  if(msg.type==='opacity')shellMat.uniforms.uOpacity.value=clamp(Number(msg.value)||0,.02,.9);
+  if(msg.type==='cut'){if(msg.value===null)releaseCut();else engageCut(clamp(Number(msg.value),0,48),false);}
+  if(msg.type==='roam'){toggleFP();}
+  if(msg.type==='fly')toggleFly();
+  if(msg.type==='rotate')document.getElementById('btnRotate').click();
+  if(msg.type==='iso-cut')document.getElementById('btnIsoCut').click();
+  if(msg.type==='step'){if(fp.on)toggleFP(false);stepDefect(msg.dir<0?-1:1);var nextId=state.sel&&state.sel.def.id;hostMuted=false;if(nextId)hostSend('selected',{id:nextId});hostMuted=true;}
+  if(msg.type==='background'){if(!msg.url){if(scene.background&&scene.background.isTexture)scene.background.dispose();scene.background=new THREE.Color('#07101c');}else if(/^data:image\/(png|jpeg|webp);base64,/.test(msg.url)){new THREE.TextureLoader().load(msg.url,function(texture){if(scene.background&&scene.background.isTexture)scene.background.dispose();texture.colorSpace=THREE.SRGBColorSpace;scene.background=texture;});}}
+
+  if(msg.type==='pause')setPaused(true);
+  if(msg.type==='task'){
+   hostTask={progress:clamp(Number(msg.progress)||0,0,1),playing:!!msg.playing,scanStart:Number.isFinite(msg.scanStart)?msg.scanStart:-90,scanEnd:Number.isFinite(msg.scanEnd)?msg.scanEnd:90};setPaused(!hostTask.playing);fp.speed=Number(msg.speed)||.6;
+   gCar.userData.car.position.x=hostTask.progress*48;
+   var start=Number(msg.start)||0,travel=Math.max(.001,hostTask.progress*48-start);coverageMesh.scale.x=travel;coverageMesh.position.x=start+travel/2;
+   obstacleMesh.visible=!!msg.obstacle;if(msg.obstacle){var ob=msg.obstacle;obstacleMesh.position.set(Number(ob.x)||24,-1.89,Number(ob.z)||0);obstacleMesh.scale.set(ob.length||1,1,ob.width||1);}
+  }
+ }finally{hostMuted=false;}
+});
+if(embedded){
+ scene.background.set('#07101c');scene.fog.density=.001;gGround.visible=false;gGrout.visible=false;gRebar.visible=false;gRay.visible=true;riskGroup.visible=false;
+ if(bgStars)bgStars.visible=true;bgCity.visible=true;gProfile.visible=false;shellMat.uniforms.uOpacity.value=.5;shellMat.uniforms.uFogDensity.value=.001;
+ document.getElementById('ckLabelAll').checked=false;document.getElementById('ckRay').checked=true;
+ VIEWS.iso={target:[24,0,0],theta:.5,phi:1.16,dist:41*Math.max(1,2.1/(window.innerWidth/window.innerHeight))};VIEWS.side={target:[24,0,0],theta:Math.PI/2,phi:1.45,dist:46};VIEWS.top={target:[24,0,0],theta:Math.PI/2,phi:.18,dist:48};
+ hostTask={progress:0,playing:false,scanStart:-90,scanEnd:90};carPaused=true;
+ focusDefect=bridgeFocus;
+ window.addEventListener('keydown',function(e){if(e.key==='p'||e.key==='P'){e.preventDefault();e.stopImmediatePropagation();hostSend('toggle-task');}},true);
+ // 只读场景状态供集成验收使用；不提供任意执行接口。
+ window.SLZJScene={snapshot:function(){return {firstPerson:fp.on,freeFly:fly.on,autoRotate:orbit.autoRotate,layers:{stars:bgStars&&bgStars.visible,city:bgCity.visible,ground:gGround.visible,grout:gGrout.visible,rebar:gRebar.visible,profile:gProfile.visible,car:gCar.visible,ray:gRay.visible},backgroundImage:!!(scene.background&&scene.background.isTexture),selectedId:state.sel&&state.sel.def.id,carX:gCar.userData.car.position.x,playing:!carPaused,visibleIds:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){return dm.def.id;}),positions:defectMeshes.map(function(dm){return {id:dm.def.id,x:dm.pos.x,y:dm.pos.y,z:dm.pos.z};}),projected:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){var p=dm.mesh.getWorldPosition(new THREE.Vector3()).project(camera);return {id:dm.def.id,x:(p.x*.5+.5)*window.innerWidth,y:(-p.y*.5+.5)*window.innerHeight,z:p.z};}),obstacleVisible:obstacleMesh.visible,opacity:shellMat.uniforms.uOpacity.value};}};
+ setTimeout(function(){hostSend('ready');},50);
+}
+// SLZJ_BRIDGE_END
+
 // ==================================================================== 启动
 setView('iso', true);
 frame();
@@ -3150,10 +2706,7 @@ setTimeout(function(){
 // 默认选中最高等级病害，进入即可见
 setTimeout(function(){
   var first = defectMeshes.filter(function(dm){ return dm.def.L === 'I'; })[0];
-  if (first) select(first);
+  if (first && !embedded) select(first);
 }, 400);
 
 })();
-</script>
-</body>
-</html>

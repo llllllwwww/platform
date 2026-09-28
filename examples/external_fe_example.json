@@ -1,0 +1,19 @@
+{
+  "solver": "external-demo-adapter",
+  "modelId": "FE-DEMO-001",
+  "units": {
+    "displacement": "mm",
+    "stress": "MPa"
+  },
+  "assumptions": [
+    "仅用于格式演示",
+    "边界和荷载须由外部分析人员复核"
+  ],
+  "results": {
+    "maxDisplacement": 0.2,
+    "maxStress": 1.0,
+    "caseId": "CASE-DEMO-001"
+  },
+  "source": "外部结果格式样例，非现场鉴定",
+  "batch": "B202609"
+}

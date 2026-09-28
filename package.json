@@ -1,0 +1,15 @@
+{
+  "name": "suilei-tunnel-workbench",
+  "private": true,
+  "version": "2.0.0",
+  "description": "隧雷智检本地四模块工作台；开发测试依赖不影响直接运行",
+  "scripts": {
+    "test": "node tests/core.test.js && node tests/adapters.test.js",
+    "test:browser": "node tests/browser.integration.cjs",
+    "test:retained": "node tests/retained-components.cjs",
+    "test:entry": "node tests/local-entry.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

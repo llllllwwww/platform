@@ -33,3 +33,6 @@ node_modules/
 *.rar
 *.pem
 *.key
+
+# 本地浏览器验收输出
+tests/output/
