@@ -239,6 +239,8 @@ def main() -> None:
     ap.add_argument("--depth-max", type=float, default=0.0, help="max integrated depth; 0 = auto from fused cloud")
     ap.add_argument("--min-weight", type=int, default=4, help="voxels observed by fewer views are treated as empty")
     ap.add_argument("--smooth-iterations", type=int, default=12)
+    ap.add_argument("--mono-depth", default="",
+                    help="directory of *.depth.npz from mono_depth.py; overrides COLMAP .geometric.bin")
     ap.add_argument("--report", default="", help="optional JSON report path")
     ap.add_argument("--max-voxels", type=float, default=160e6, help="safety cap on grid size")
     args = ap.parse_args()
@@ -273,20 +275,29 @@ def main() -> None:
     if total > args.max_voxels:
         raise SystemExit(f"voxel grid too large ({total}); raise --voxel or --max-voxels")
 
+    mono_dir = Path(args.mono_depth) if args.mono_depth else None
+    if mono_dir and not mono_dir.exists():
+        raise SystemExit(f"mono depth directory not found: {mono_dir}")
     depth_dir = dense / "stereo/depth_maps"
     used = 0
     for i, fr in enumerate(frames):
-        bin_path = depth_dir / f"{fr['name']}.geometric.bin"
-        if not bin_path.exists():
-            continue
-        depth = read_depth_bin(bin_path)
+        if mono_dir:
+            npz_path = mono_dir / f"{fr['name']}.depth.npz"
+            if not npz_path.exists():
+                continue
+            depth = np.load(npz_path)["depth"]
+        else:
+            bin_path = depth_dir / f"{fr['name']}.geometric.bin"
+            if not bin_path.exists():
+                continue
+            depth = read_depth_bin(bin_path)
         if depth.shape != (fr["size"][1], fr["size"][0]):
             continue  # undistorted size mismatch guard
         vol.integrate(depth, fr["R"], fr["t"], fr["K"], fr["size"], depth_max)
         used += 1
         if (i + 1) % 40 == 0:
             print(f"[tsdf] integrated {i + 1}/{len(frames)}")
-    print(f"[tsdf] integrated {used} depth maps in {time.time() - started:.1f}s")
+    print(f"[tsdf] integrated {used} depth maps ({'mono' if mono_dir else 'colmap mvs'}) in {time.time() - started:.1f}s")
 
     weight = vol.weight
     tsdf = vol.tsdf.float().cpu().numpy()

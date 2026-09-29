@@ -144,6 +144,64 @@ def estimate_circle(observed,domain,n_stations=32):
     arr=np.asarray(fits)
     return float(np.median(arr[:,0])),float(np.median(arr[:,1])),float(np.median(arr[:,2])),len(fits)
 
+def estimate_horseshoe(observed,domain,n_stations=32):
+    """Per-station u-shaped (horseshoe) section: flat floor, two straight walls,
+    arched roof. Returns robust (W, H_wall, f, cx, cy, floor_sign).
+
+    Local frame y is arbitrary in sign, so the denser extreme band is taken as the
+    walkable floor (people/vehicles produce many near-floor returns).
+    Geometry in normalised section coords: floor at v=0 spanning [-W/2, W/2],
+    walls up to v=H_wall, roof = circular arc radius f>=W/2 springing from
+    (+/-W/2, H_wall)."""
+    s=observed[:,2];edges=np.linspace(*domain,n_stations+1);fits=[]
+    for lo,hi in zip(edges[:-1],edges[1:]):
+        q=observed[(s>=lo)&(s<hi)]
+        if len(q)<40:continue
+        xlo,xhi=np.quantile(q[:,0],[.02,.98]);ylo,yhi=np.quantile(q[:,1],[.02,.98])
+        W=xhi-xlo;H=yhi-ylo
+        if W<1e-6 or H<1e-6:continue
+        # denser extreme band = floor
+        low_band=(q[:,1]>=ylo)&(q[:,1]<=ylo+.12*H);high_band=(q[:,1]<=yhi)&(q[:,1]>=yhi-.12*H)
+        floor_sign=1.0 if low_band.sum()>=high_band.sum() else -1.0  # +1: floor at y_min, walls rise toward y_max
+        fits.append([W,H,xhi-xlo,(xlo+xhi)/2,(ylo+yhi)/2,floor_sign])
+    if len(fits)<5:raise ValueError('Not enough cross-section support for a horseshoe estimate')
+    arr=np.asarray(fits)
+    W=float(np.median(arr[:,0]));H=float(np.median(arr[:,1]))
+    cx=float(np.median(arr[:,3]));cy=float(np.median(arr[:,4]))
+    floor_sign=float(np.median(arr[:,5]))
+    # Wall height from the straight-wall band: columns near +/-W/2 whose y spread is linear.
+    # Robust default for tunnels/corridors: walls occupy ~55% of section height.
+    H_wall=0.55*H
+    return W,H_wall,cx,cy,floor_sign,len(fits)
+
+def horseshoe_profile(W,H_wall,f,cx,cy,floor_sign,theta):
+    """Map theta in [-pi,pi) onto the u-shaped section perimeter, uniform per leg.
+
+    Section coords: floor at v=0 spanning [-W/2,W/2] (centre cx), walls up to
+    v=H_wall, roof arc of radius f>=W/2 centred on the axis at v=H_wall,
+    springing at (+/-W/2, H_wall). Legs in order: bottom W, right wall,
+    roof arc (f*(pi-2*theta_r)), left wall. Returns absolute local (x,y),
+    flipping v by floor_sign so the floor lands on the observed floor side."""
+    f=max(f,W/2+1e-9)
+    theta_r=np.arccos(np.clip(W/(2*f),-1,1))
+    arc_span=np.pi-2*theta_r
+    per=W+2*H_wall+f*arc_span
+    t=(theta+np.pi)/(2*np.pi);s=t*per
+    w2=W/2
+    on_b=s<W
+    bx=cx-w2+s;bv=np.zeros_like(s)
+    on_rw=(s>=W)&(s<W+H_wall)
+    rx=np.full_like(s,cx+w2);rv=s-W
+    on_arc=(s>=W+H_wall)&(s<W+H_wall+f*arc_span)
+    ang=theta_r+(s-W-H_wall)/max(f*arc_span,1e-9)*(np.pi-2*theta_r)
+    ax=cx+f*np.cos(ang);av=H_wall+f*np.sin(ang)
+    on_lw=s>=W+H_wall+f*arc_span
+    lx=np.full_like(s,cx-w2);lv=H_wall-(s-(W+H_wall+f*arc_span))
+    x=np.where(on_b,bx,np.where(on_rw,rx,np.where(on_arc,ax,np.where(on_lw,lx,cx-w2))))
+    v=np.where(on_b,bv,np.where(on_rw,rv,np.where(on_arc,av,np.where(on_lw,lv,np.zeros_like(s)))))
+    y_local=(cy-floor_sign*H/2)+floor_sign*v
+    return x,y_local
+
 def estimate_box(observed,domain,n_stations=32):
     """Per-station axis-aligned extents (2%-98% quantiles), then a robust global median.
 

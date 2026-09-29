@@ -99,6 +99,8 @@ def main() -> None:
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--max-frames", type=int, default=0, help="0 = all")
     ap.add_argument("--stride", type=int, default=4, help="backproject every Nth pixel")
+    ap.add_argument("--mask-radius", type=float, default=0.0,
+                    help="pixels within this distance of a projected sparse point are trusted; 0 = off")
     ap.add_argument("--report", default="")
     args = ap.parse_args()
 
@@ -117,8 +119,9 @@ def main() -> None:
         frames = frames[: args.max_frames]
     rec = pycolmap.Reconstruction(str(dense / "sparse"))
 
-    fused_pts, ratios_all = [], []
-    depth_dir = out / "depth"
+    fused_pts, ratios_all, anchor_samples = [], [], []
+    raw_preds, frame_refs = [], []
+    kept_frames = []
     for idx, fr in enumerate(frames):
         img_path = dense / "images" / fr["name"]
         if not img_path.exists():
@@ -132,17 +135,45 @@ def main() -> None:
             sampled = pred[vi, ui]
             ok = sampled > 1e-6
             # DA2 relative output is inverse-depth (measured: corr(pred,ref) < 0,
-            # corr(1/pred,ref) > 0), so metric depth = pred * scale with
-            # scale = median(ref * pred).
-            scales = ref_depth[ok] * sampled[ok]
-            med = float(np.median(scales))
-            ratios_all.append(float(np.median(np.abs(np.log((ref_depth[ok] * sampled[ok]) / max(med, 1e-9))))))
+            # corr(1/pred,ref) > 0); ref*pred samples the global scale.
+            anchor_samples.append(ref_depth[ok] * sampled[ok])
+        raw_preds.append(pred.astype(np.float16))
+        frame_refs.append((fr, pix, ref_depth))
+        kept_frames.append(fr)
+        if (idx + 1) % 40 == 0:
+            print(f"[mono] inferred {idx + 1}/{len(frames)}")
+    # Global anchoring: one scale for the whole sequence. Per-frame medians vary
+    # ~18% (measured) because sparse coverage differs per frame; a rigid corridor
+    # needs a single consistent scale or TSDF fusion stacks contradictory fields.
+    global_scale = float(np.median(np.concatenate(anchor_samples))) if anchor_samples else 1.0
+    print(f"[mono] global scale {global_scale:.4f} from {sum(len(a) for a in anchor_samples)} anchor samples")
+    depth_dir = out / "depth"
+    for pred16, (fr, pix, ref_depth) in zip(raw_preds, frame_refs):
+        pred = pred16.astype(np.float32)
+        depth_metric = pred * global_scale
+        # Confidence region: pixels within mask_radius of a projected sparse point.
+        # Outside it the network is extrapolating; those depths are invalid (0) so
+        # TSDF integration and point back-projection ignore them.
+        from scipy.spatial import cKDTree
+
+        hh, ww = depth_metric.shape
+        grid = np.mgrid[0:hh, 0:ww].transpose(1, 2, 0).reshape(-1, 2)[:, ::-1]  # (u,v)
+        if len(pix) >= 5 and args.mask_radius > 0:
+            dist, _ = cKDTree(pix).query(grid, k=1, workers=-1)
+            valid2d = (dist.reshape(hh, ww) <= args.mask_radius)
         else:
-            med = 1.0
-        depth_metric = pred * med  # network depth -> SfM-scale depth
+            valid2d = np.ones((hh, ww), dtype=bool)
+        # Per-frame range gate from the sparse reference depths themselves.
+        if len(ref_depth) >= 8:
+            d_hi = float(np.quantile(ref_depth, 0.95) * 1.3)
+            d_lo = max(float(np.quantile(ref_depth, 0.05) * 0.7), 1e-3)
+        else:
+            d_hi, d_lo = np.inf, 0.0
+        keep = valid2d & (depth_metric >= d_lo) & (depth_metric <= d_hi)
+        depth_metric = np.where(keep, depth_metric, 0.0)
         np.savez_compressed(depth_dir / (fr["name"] + ".depth.npz"),
-                            depth=depth_metric.astype(np.float32), scale=med)
-        # backproject subsampled grid
+                            depth=depth_metric.astype(np.float32), scale=global_scale)
+        # backproject subsampled grid (depth already gated: 0 = invalid)
         h, w = depth_metric.shape
         vv, uu = np.mgrid[0:h:args.stride, 0:w:args.stride]
         d = depth_metric[::args.stride, ::args.stride]
@@ -152,18 +183,18 @@ def main() -> None:
                            d[ok]], axis=-1)
         world = (fr["R"].T @ (cam_xy - fr["t"]).T).T
         fused_pts.append(world.astype(np.float64))
-        if (idx + 1) % 20 == 0:
-            print(f"[mono] {idx + 1}/{len(frames)} frames")
     pts = np.concatenate(fused_pts, axis=0) if fused_pts else np.zeros((0, 3))
     if len(pts):
         write_ply(out / "fused_mono.ply", pts, np.zeros((0, 3), dtype=np.int64))
     spread = float(np.median(ratios_all)) if ratios_all else float("nan")
-    report = {"frames": len(frames), "points": int(len(pts)),
+    report = {"frames": len(kept_frames), "points": int(len(pts)),
+              "global_scale": global_scale,
               "scale_anchor_log_spread_median": spread,
               "model": "Depth-Anything-V2-Small (Apache-2.0)",
               "seconds": round(time.time() - started, 1),
-              "limits": ["Relative depth anchored to SfM sparse points per frame; "
-                         "log-spread measures internal anchoring consistency, not survey accuracy."]}
+              "limits": ["Relative depth anchored to SfM sparse points with ONE global scale "
+                         "(per-frame medians vary ~18%); log-spread measures internal anchoring "
+                         "consistency, not survey accuracy."]}
     (out / ("mono_report.json" if not args.report else args.report)).write_text(
         json.dumps(report, indent=1), encoding="utf-8")
     print(f"[mono] wrote {out} in {time.time() - started:.1f}s | anchor log-spread {spread:.4f}")
