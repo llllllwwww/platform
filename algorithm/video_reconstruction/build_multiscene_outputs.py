@@ -35,7 +35,9 @@ def main():
         if args.stage in ('geometry','all'):
             audit=json.loads((run/'geometry_audit.json').read_text('utf-8'))
             if not audit['dense_readiness_heuristic']:raise ValueError('Selected model did not pass geometric support checks')
+            if not (run/'dense/filtered/postprocess_report.json').exists():execute('mesh_postprocess',python('mesh_postprocess.py',['--run',run,'--colmap',colmap]))
             if not (run/'surface.npz').exists():export_npz(run/'dense/mesh_oriented.ply',run/'surface.npz',scene['scene_id'])
+            if not (run/'dense/textured/mesh.ply').exists():execute('raw_texture',[colmap,'mesh_texturer','--input_path',case['run']+'/dense/mesh_oriented.ply','--output_path',case['run']+'/dense/textured','--workspace_path',case['run']+'/dense'])
             if not (run/'regularization/report.json').exists():execute('refinement',python('refine_surface.py',['--run',run,'--prior',case['prior']]))
             if not (run/'regularization/textured/mesh.ply').exists():
                 execute('refined_texture',[colmap,'mesh_texturer','--input_path',case['run']+'/regularization/surface_regularized.ply',

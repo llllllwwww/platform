@@ -16,6 +16,8 @@ def main():
     parser.add_argument('--out',required=True)
     parser.add_argument('--max-image-size',type=int,default=1000)
     parser.add_argument('--iterations',type=int,default=3)
+    parser.add_argument('--fusion-preset',choices=['default','strict'],default='default',
+                        help='strict tightens stereo_fusion consistency for forward-motion video: fewer, cleaner points')
     args=parser.parse_args()
     executable=Path(args.colmap).resolve()
     paths={k:Path(getattr(args,k)).resolve() for k in ['images','model','out']}
@@ -29,10 +31,14 @@ def main():
     if out.exists() and any(out.iterdir()): raise FileExistsError('Use a fresh dense output directory')
     out.mkdir(parents=True,exist_ok=True)
     d=rel['out']
+    fusion=['stereo_fusion','--workspace_path',d,'--workspace_format','COLMAP','--input_type','geometric','--output_path',d+'/fused.ply']
+    if args.fusion_preset=='strict':
+        fusion+=['--StereoFusion.min_num_pixels','12','--StereoFusion.max_reproj_error','1.5',
+                 '--StereoFusion.max_depth_error','0.02','--StereoFusion.num_consistent_samples','5']
     stages=[
       ['image_undistorter','--image_path',rel['images'],'--input_path',rel['model'],'--output_path',d,'--output_type','COLMAP','--max_image_size','1600'],
       ['patch_match_stereo','--workspace_path',d,'--workspace_format','COLMAP','--PatchMatchStereo.geom_consistency','1','--PatchMatchStereo.max_image_size',str(args.max_image_size),'--PatchMatchStereo.num_iterations',str(args.iterations)],
-      ['stereo_fusion','--workspace_path',d,'--workspace_format','COLMAP','--input_type','geometric','--output_path',d+'/fused.ply'],
+      fusion,
       ['advancing_front_mesher','--input_path',d,'--output_path',d+'/mesh.ply'],
       ['mesh_texturer','--input_path',d+'/mesh_oriented.ply','--output_path',d+'/textured','--workspace_path',d],
     ]

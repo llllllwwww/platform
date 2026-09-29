@@ -47,7 +47,9 @@ def bounded_smooth(vertices,faces,iterations=8,fraction=.3):
 def observed_refinement(run,reason):
     run=Path(run);out=run/'regularization';out.mkdir(exist_ok=True)
     scene=json.loads((run/'scene.json').read_text('utf-8'))
-    with np.load(run/'surface.npz') as data:vertices=data['vertices'].copy();faces=data['faces'].astype(np.int32)
+    with np.load(run/'surface.npz') as data:
+        vertices=data['vertices'].copy();faces=data['faces'].astype(np.int32)
+        filled=data['filled_vertices'].astype(bool) if 'filled_vertices' in data.files else np.zeros(len(vertices),bool)
     edges=np.concatenate([faces[:,[0,1]],faces[:,[1,2]],faces[:,[2,0]]]);rows=np.r_[edges[:,0],edges[:,1]];columns=np.r_[edges[:,1],edges[:,0]]
     adjacency=coo_matrix((np.ones(len(rows)),(rows,columns)),shape=(len(vertices),len(vertices))).tocsr()
     count,labels=connected_components(adjacency,directed=False)
@@ -58,19 +60,19 @@ def observed_refinement(run,reason):
     kept_faces=index[kept_faces];original=vertices[used];refined,limits,boundary=bounded_smooth(original,kept_faces)
     distance=np.linalg.norm(refined-original,axis=1);identity=hashlib.sha256(np.asarray(refined,dtype='<f4').tobytes()+kept_faces.tobytes()).hexdigest()[:20]
     np.savez_compressed(out/'surface_regularized.npz',vertices=refined.astype(np.float32),faces=kept_faces,
-        scene_id=scene['scene_id'],surface_id=identity,support=np.ones(len(refined),np.uint8),distance_to_observation=distance.astype(np.float32))
+        scene_id=scene['scene_id'],surface_id=identity,support=(~filled[used]).astype(np.uint8),distance_to_observation=distance.astype(np.float32))
     write_ply(out/'surface_regularized.ply',refined,kept_faces)
     triangle=refined[kept_faces];face_normals=np.cross(triangle[:,1]-triangle[:,0],triangle[:,2]-triangle[:,0]);normals=np.zeros_like(refined)
     for i in range(3):np.add.at(normals,kept_faces[:,i],face_normals)
     normals/=np.maximum(np.linalg.norm(normals,axis=1,keepdims=True),1e-15)
-    np.savez_compressed(out/'display_attributes.npz',normals=normals.astype(np.float32),supported=np.ones(len(refined),np.uint8),caps_positions=np.empty((0,3,3),np.float32))
+    np.savez_compressed(out/'display_attributes.npz',normals=normals.astype(np.float32),supported=(~filled[used]).astype(np.uint8),caps_positions=np.empty((0,3,3),np.float32))
     report={'scene_id':scene['scene_id'],'surface_id':identity,'surface_kind':'observed_smoothed','closed_surface_id':None,
         'method':'Boundary-pinned, displacement-bounded Taubin smoothing of measured mesh; tiny isolated components removed',
         'prior_rejection_reason':reason,'station_range':None,'coordinate_origin':None,'coordinate_basis_rows':None,
         'raw_topology':topology(vertices,faces),'regularized_topology':topology(refined,kept_faces),'closed_topology':None,
         'components_before':int(count),'components_retained':int(retain.sum()),'removed_area_fraction':float(area[~keep].sum()/max(area.sum(),1e-15)),
-        'support_definition':'Each vertex is within 30% of its original local edge spacing; relocation uses the median local bound.',
-        'local_support_threshold_sfm_unit':float(np.median(limits)),'supported_vertices':len(refined),'inferred_vertices':0,
+        'support_definition':'Each vertex is within 30% of its original local edge spacing; relocation uses the median local bound. Hole-filled vertices (surface.npz filled_vertices) are marked inferred.',
+        'local_support_threshold_sfm_unit':float(np.median(limits)),'supported_vertices':int((~filled[used]).sum()),'inferred_vertices':int(filled[used].sum()),
         'pinned_boundary_vertices':len(boundary),'displacement_median':float(np.median(distance)),'displacement_max':float(max(distance)),
         'maximum_local_edge_fraction':.3,'boundary_positions_unchanged':bool(np.array_equal(refined[boundary],original[boundary])),
         'limits':['No axial/circular prior is imposed on unsupported scenes; open boundaries remain open.',
