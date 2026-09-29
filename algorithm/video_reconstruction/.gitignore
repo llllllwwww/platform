@@ -1,0 +1,22 @@
+# Generated data, environments, downloads and browser profiles
+/.venv/
+/venv/
+/data/
+/results/
+/third_party/
+/tools/
+/web/
+/outputs/
+__pycache__/
+*.py[cod]
+*.pth
+*.pt
+*.onnx
+*.npz
+*.ply
+*.db
+*.log
+*.part
+*.webm
+.env
+.env.*

@@ -1,0 +1,41 @@
+{
+  "source_kind": "real_camera_video",
+  "input_images": 40,
+  "registered_images": 40,
+  "registration_fraction": 1.0,
+  "points3D": 9828,
+  "viewer_points": 9828,
+  "point_mean_reprojection_error_px": 0.7480888104836813,
+  "point_median_reprojection_error_px": 0.6173716617223144,
+  "point_p95_reprojection_error_px": 1.7516849188354155,
+  "mean_track_length": 5.128306878306878,
+  "scale": {
+    "status": "arbitrary",
+    "unit": "sfm_unit",
+    "factor": 1.0,
+    "reason": "Monocular images alone do not determine metric scale."
+  },
+  "limits": [
+    "Reprojection residual is internal fit, not metric accuracy.",
+    "No held-out tunnel video or survey ground truth was evaluated by this export."
+  ],
+  "backend": "pycolmap 3.13.0 / CPU SIFT",
+  "elapsed_s": 333.6178920000093,
+  "selected_component": 0,
+  "components": [
+    {
+      "id": 0,
+      "registered_images": 40,
+      "points3D": 9828
+    }
+  ],
+  "unregistered_images": [],
+  "configuration": {
+    "matching": "sequential",
+    "overlap": 8,
+    "max_image_size": 1600,
+    "max_features": 6000,
+    "calibration_fixed": false
+  },
+  "note": "Only largest connected component exported; components are not silently merged."
+}
