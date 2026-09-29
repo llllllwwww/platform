@@ -39,6 +39,9 @@ def image_paths(directory):
     return sorted(p for p in directory.iterdir() if p.suffix.lower() in IMAGE_EXTENSIONS)
 
 def prepare_video(args):
+    if getattr(args,'selection','uniform')=='quality':
+        from keyframes import prepare_quality_video
+        return prepare_quality_video(args)
     import cv2
     if args.sample_hz <= 0 or args.max_frames < 2 or args.min_sharpness < 0:
         raise ValueError('sample-hz > 0, max-frames >= 2, min-sharpness >= 0 required')
@@ -208,6 +211,11 @@ def export_scene(rec, out, source_kind, input_count=None, anchor_file=None, max_
     write_json(out / 'scene.json', scene)
     errors = np.array([p.error for p in rec.points3D.values()])
     tracks = [p.track.length() for p in rec.points3D.values()]
+    observations={i:0 for i,im in rec.images.items() if im.has_pose}
+    for point in rec.points3D.values():
+        for element in point.track.elements:
+            if element.image_id in observations:observations[element.image_id]+=1
+    supported_images=sum(n>=30 for n in observations.values())
     quality = {'source_kind': source_kind, 'input_images': input_count,
                'registered_images': rec.num_reg_images(),
                'registration_fraction': rec.num_reg_images()/input_count if input_count else None,
@@ -216,6 +224,10 @@ def export_scene(rec, out, source_kind, input_count=None, anchor_file=None, max_
                'point_median_reprojection_error_px': float(np.median(errors)),
                'point_p95_reprojection_error_px': float(np.quantile(errors, .95)),
                'mean_track_length': float(np.mean(tracks)), 'scale': scale,
+               'observation_support':{'min_tracks_per_image':min(observations.values()),
+                   'median_tracks_per_image':float(np.median(list(observations.values()))),
+                   'images_with_at_least_30_landmarks':supported_images,
+                   'supported_registration_fraction':supported_images/input_count if input_count else None},
                'limits': ['Reprojection residual is internal fit, not metric accuracy.',
                           'No held-out tunnel video or survey ground truth was evaluated by this export.']}
     write_json(out / 'quality.json', quality)
@@ -240,12 +252,16 @@ def run_sfm(args):
     out = new_directory(args.out)
     start = time.perf_counter()
     options = pycolmap.ImageReaderOptions()
-    options.camera_model = calibration['model'] if calibration else 'SIMPLE_RADIAL'
+    options.camera_model = calibration['model'] if calibration else args.camera_model
+    if getattr(args,'image_mask',None):
+        options.camera_mask_path = native_path(args.image_mask)
     if calibration:
         options.camera_params = ','.join(map(str, calibration['params']))
     sift = pycolmap.FeatureExtractionOptions()
     sift.max_image_size = args.max_image_size
     sift.sift.max_num_features = args.max_features
+    sift.sift.estimate_affine_shape = args.affine_sift
+    sift.sift.domain_size_pooling = args.affine_sift
     sift.num_threads = args.threads
     database = native_path(out / 'database.db')
     pycolmap.set_random_seed(0)
@@ -288,7 +304,8 @@ def run_sfm(args):
                         {im.name for im in maps[key].images.values() if im.has_pose}),
                     'configuration': {'matching': args.matching, 'overlap': args.overlap,
                                       'max_image_size': args.max_image_size,
-                                      'max_features': args.max_features, 'calibration_fixed': calibration is not None},
+                                      'max_features': args.max_features, 'calibration_fixed': calibration is not None,
+                                       'camera_model':options.camera_model,'affine_sift':args.affine_sift},
                     'note': 'Only largest connected component exported; components are not silently merged.'})
     write_json(out / 'quality.json', quality)
     print(json.dumps(quality, ensure_ascii=False, indent=2))
@@ -302,11 +319,15 @@ def main():
     video.add_argument('--sample-hz', type=float, default=3)
     video.add_argument('--max-frames', type=int, default=150)
     video.add_argument('--min-sharpness', type=float, default=0)
+    video.add_argument('--selection',choices=['uniform','quality'],default='uniform',help='Quality mode selects sharp, exposed frames within temporal windows without changing their pixels')
     video.set_defaults(func=prepare_video)
     sfm = commands.add_parser('sfm', help='Run CPU COLMAP baseline on images')
     sfm.add_argument('--images', required=True)
     sfm.add_argument('--out', required=True)
     sfm.add_argument('--calibration')
+    sfm.add_argument('--image-mask',help='Single-camera validity mask; nonzero pixels are eligible for features')
+    sfm.add_argument('--camera-model',choices=['SIMPLE_RADIAL','RADIAL','PINHOLE','OPENCV','OPENCV_FISHEYE'],default='SIMPLE_RADIAL')
+    sfm.add_argument('--affine-sift',action='store_true',help='Affine-shape and domain-size-pooled SIFT for oblique/low-texture views')
     sfm.add_argument('--camera-mode', choices=['single', 'per_image'], default='single')
     sfm.add_argument('--matching', choices=['sequential', 'exhaustive'], default='sequential')
     sfm.add_argument('--overlap', type=int, default=10)
@@ -330,7 +351,7 @@ def main():
                                        anchor_file=args.scale_anchor, max_points=args.max_points), ensure_ascii=False))
     export.set_defaults(func=do_export)
     args = parser.parse_args()
-    for key in ('images', 'out', 'video', 'model', 'calibration', 'scale_anchor'):
+    for key in ('images', 'out', 'video', 'model', 'calibration', 'scale_anchor', 'image_mask'):
         value = getattr(args, key, None)
         if value is not None:
             setattr(args, key, str(Path(value).resolve()))

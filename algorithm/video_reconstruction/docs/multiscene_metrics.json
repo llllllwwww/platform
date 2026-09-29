@@ -1,0 +1,873 @@
+{
+  "geometry": [
+    {
+      "id": "dvp_handheld",
+      "title": "DVP 人行隧道 · 手持手机",
+      "source": "https://commons.wikimedia.org/wiki/File:DVP_Tunnel_at_Moccasin_Trail_Park_in_Toronto_(20181008093109).webm",
+      "camera_description": "handheld Pixel 2; metadata identifies hardware",
+      "review_notes": [],
+      "video_sha256": "0189d862b01ad628649a21b137f22cde5eb31bddba498298aad1960c589d0b9c",
+      "sample_hz": 2.0,
+      "input_images": 37,
+      "registered_images": 37,
+      "points3D": 8052,
+      "reprojection_error_px": 0.8412942919761026,
+      "baseline": {
+        "sample_hz": 2,
+        "input_images": 40,
+        "registered_images": 40,
+        "points3D": 6699,
+        "reprojection_error_px": 0.8029576450688374
+      },
+      "audit": {
+        "registered_images": 37,
+        "tracks_per_registered_image": {
+          "min": 269,
+          "median": 1028.0,
+          "p10": 827.0
+        },
+        "point_max_triangulation_angle_degrees": {
+          "median": 4.216360469860442,
+          "p10": 2.0955824566706496
+        },
+        "frames_with_at_least_30_landmarks": 37,
+        "dense_readiness_heuristic": true,
+        "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
+      },
+      "surface_kind": "regularized_tunnel",
+      "raw_triangles": 345325,
+      "refined_triangles": 68736,
+      "supported_vertices": 26154,
+      "inferred_vertices": 8406,
+      "raw_boundary_edges": 4943,
+      "refined_boundary_edges": 384,
+      "closed_boundary_edges": 0,
+      "prior_rejection": null,
+      "raw_localization": {
+        "detections": 760,
+        "hit_count": 63278,
+        "requested_count": 70502,
+        "usable_count": 70502,
+        "ray_backend": "gpu"
+      },
+      "refined_localization": {
+        "detections": 760,
+        "hit_count": 51443,
+        "requested_count": 70502,
+        "usable_count": 70502,
+        "observations_by_status": {
+          "no_original_surface_evidence": 7224,
+          "outside_fitted_segment": 8574,
+          "hit": 51443,
+          "excessive_relocation": 3176,
+          "no_surface_hit": 85
+        },
+        "candidates_with_mapped_points": 584,
+        "supported_hit_count": 50645,
+        "inferred_hit_count": 798,
+        "max_allowed_displacement_sfm_unit": 0.06538038950221023,
+        "accepted_displacement_median": 0.007842302322387962,
+        "accepted_displacement_p95": 0.039154505729675285
+      },
+      "multiview": {
+        "candidate_observations": 760,
+        "evidence_groups": 385,
+        "groups_with_multiple_observations": 155,
+        "observations_with_repeated_pixel_evidence": 622,
+        "same_frame_merge_conflicts_rejected": 257,
+        "view_checks": {
+          "not_repeated": 483,
+          "supports_candidate": 1487,
+          "ambiguous_response": 147,
+          "geometry_inconclusive": 683
+        }
+      },
+      "viewer_verification": {
+        "initial": {
+          "frame": 18,
+          "surface": "regularized",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 68736,
+          "currentCandidates": 30,
+          "selected": null,
+          "markerCount": 2635,
+          "glError": 0
+        },
+        "setup": {
+          "frame": 18,
+          "id": "frame_00000282-d0",
+          "count": 37,
+          "surfaceKind": "regularized_tunnel",
+          "hasRefinement": true
+        },
+        "comparisons": [
+          {
+            "frame": 18,
+            "surface": "regularized",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 68736,
+            "currentCandidates": 30,
+            "selected": "frame_00000282-d0",
+            "markerCount": 2635,
+            "glError": 0
+          },
+          {
+            "frame": 18,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 345325,
+            "currentCandidates": 30,
+            "selected": "frame_00000282-d0",
+            "markerCount": 2769,
+            "glError": 0
+          }
+        ],
+        "follow": {
+          "frame": 18,
+          "surface": "regularized",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 68736,
+          "currentCandidates": 30,
+          "selected": "frame_00000282-d0",
+          "markerCount": 2635,
+          "glError": 0
+        },
+        "last": {
+          "frame": 36,
+          "surface": "raw",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 345325,
+          "currentCandidates": 0,
+          "selected": null,
+          "markerCount": 0,
+          "glError": 0
+        },
+        "projection": {
+          "model": "SIMPLE_RADIAL",
+          "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
+          "max_pixel_error": 7.362765473613048e-11,
+          "samples": 5
+        },
+        "repeated": {
+          "before": 14,
+          "after": 6
+        },
+        "linkedView": {
+          "before": {
+            "frame": 0,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 345325,
+            "currentCandidates": 14,
+            "selected": "frame_00000000-d10",
+            "markerCount": 555,
+            "glError": 0
+          },
+          "after": {
+            "frame": 1,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 345325,
+            "currentCandidates": 44,
+            "selected": "frame_00000016-d23",
+            "markerCount": 1165,
+            "glError": 0
+          }
+        },
+        "exceptions": [],
+        "ready": {
+          "rendered": "true",
+          "glError": "0",
+          "ready": "true",
+          "texture": "loaded"
+        }
+      },
+      "preview": "dvp_handheld/assets/frame_00000282.jpg"
+    },
+    {
+      "id": "rail_train",
+      "title": "铁路隧道长片 · 前视相机",
+      "source": "https://github.com/leven87/tunel-abnormal-detection",
+      "camera_description": "forward-looking railway tunnel footage; camera hardware not documented",
+      "review_notes": [],
+      "video_sha256": "b8f4e7d82c978a56de32b9b3cba78a3c784726696dc4e97beec3815cd786bbb9",
+      "sample_hz": 2.0,
+      "input_images": 56,
+      "registered_images": 56,
+      "points3D": 6602,
+      "reprojection_error_px": 0.40278586615161505,
+      "baseline": {
+        "sample_hz": 2,
+        "input_images": 56,
+        "registered_images": 2,
+        "points3D": 32,
+        "reprojection_error_px": 1.083287654677397
+      },
+      "audit": {
+        "registered_images": 56,
+        "tracks_per_registered_image": {
+          "min": 226,
+          "median": 513.5,
+          "p10": 347.0
+        },
+        "point_max_triangulation_angle_degrees": {
+          "median": 7.6413185197945115,
+          "p10": 2.921783462290681
+        },
+        "frames_with_at_least_30_landmarks": 56,
+        "dense_readiness_heuristic": true,
+        "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
+      },
+      "surface_kind": "observed_smoothed",
+      "raw_triangles": 134990,
+      "refined_triangles": 134918,
+      "supported_vertices": 70791,
+      "inferred_vertices": 0,
+      "raw_boundary_edges": 9236,
+      "refined_boundary_edges": 9106,
+      "closed_boundary_edges": null,
+      "prior_rejection": "Fitted radial function is not a positive valid cross section",
+      "raw_localization": {
+        "detections": 1759,
+        "hit_count": 114340,
+        "requested_count": 166594,
+        "usable_count": 164934,
+        "ray_backend": "gpu"
+      },
+      "refined_localization": {
+        "detections": 1759,
+        "hit_count": 108075,
+        "requested_count": 166594,
+        "usable_count": 164934,
+        "observations_by_status": {
+          "no_original_surface_evidence": 52254,
+          "hit": 108075,
+          "excessive_relocation": 5389,
+          "no_surface_hit": 876
+        },
+        "candidates_with_mapped_points": 1498,
+        "supported_hit_count": 108075,
+        "inferred_hit_count": 0,
+        "max_allowed_displacement_sfm_unit": 0.029406087293911854,
+        "accepted_displacement_median": 0.003853321075439535,
+        "accepted_displacement_p95": 0.019402480125427397
+      },
+      "multiview": {
+        "candidate_observations": 1759,
+        "evidence_groups": 1069,
+        "groups_with_multiple_observations": 236,
+        "observations_with_repeated_pixel_evidence": 1025,
+        "same_frame_merge_conflicts_rejected": 233,
+        "view_checks": {
+          "supports_candidate": 2342,
+          "ambiguous_response": 187,
+          "geometry_inconclusive": 2386,
+          "not_repeated": 875
+        }
+      },
+      "viewer_verification": {
+        "initial": {
+          "frame": 28,
+          "surface": "regularized",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 134918,
+          "currentCandidates": 30,
+          "selected": null,
+          "markerCount": 1871,
+          "glError": 0
+        },
+        "setup": {
+          "frame": 28,
+          "id": "frame_00000420-d0",
+          "count": 56,
+          "surfaceKind": "observed_smoothed",
+          "hasRefinement": true
+        },
+        "comparisons": [
+          {
+            "frame": 28,
+            "surface": "regularized",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 134918,
+            "currentCandidates": 30,
+            "selected": "frame_00000420-d0",
+            "markerCount": 1871,
+            "glError": 0
+          },
+          {
+            "frame": 28,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 134990,
+            "currentCandidates": 30,
+            "selected": "frame_00000420-d0",
+            "markerCount": 1966,
+            "glError": 0
+          }
+        ],
+        "follow": {
+          "frame": 28,
+          "surface": "regularized",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 134918,
+          "currentCandidates": 30,
+          "selected": "frame_00000420-d0",
+          "markerCount": 1871,
+          "glError": 0
+        },
+        "last": {
+          "frame": 55,
+          "surface": "raw",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 134990,
+          "currentCandidates": 30,
+          "selected": null,
+          "markerCount": 2084,
+          "glError": 0
+        },
+        "projection": {
+          "model": "SIMPLE_RADIAL",
+          "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
+          "max_pixel_error": 6.75416136487783e-11,
+          "samples": 9
+        },
+        "repeated": {
+          "before": 25,
+          "after": 8
+        },
+        "linkedView": {
+          "before": {
+            "frame": 0,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 134990,
+            "currentCandidates": 25,
+            "selected": "frame_00000000-d0",
+            "markerCount": 223,
+            "glError": 0
+          },
+          "after": {
+            "frame": 1,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 134990,
+            "currentCandidates": 30,
+            "selected": "frame_00000022-d1",
+            "markerCount": 715,
+            "glError": 0
+          }
+        },
+        "exceptions": [],
+        "ready": {
+          "rendered": "true",
+          "glError": "0",
+          "ready": "true",
+          "texture": "loaded"
+        }
+      },
+      "preview": "rail_train/assets/frame_00000420.jpg"
+    },
+    {
+      "id": "rail_test",
+      "title": "铁路隧道短片 · 快速前视",
+      "source": "https://github.com/leven87/tunel-abnormal-detection",
+      "camera_description": "second railway tunnel clip; hardware and independence from train recording are unknown",
+      "review_notes": [],
+      "video_sha256": "71aa201973d44bfd3cb3f1eb8ad21d671b5d5210bd94dcb2717e4127d338dc9e",
+      "sample_hz": 6.0,
+      "input_images": 79,
+      "registered_images": 79,
+      "points3D": 8062,
+      "reprojection_error_px": 0.4206490189636514,
+      "baseline": {
+        "sample_hz": 2,
+        "input_images": 27,
+        "registered_images": 0,
+        "points3D": 0,
+        "reprojection_error_px": null
+      },
+      "audit": {
+        "registered_images": 79,
+        "tracks_per_registered_image": {
+          "min": 231,
+          "median": 506.0,
+          "p10": 433.6
+        },
+        "point_max_triangulation_angle_degrees": {
+          "median": 6.658120102913866,
+          "p10": 2.630044199621441
+        },
+        "frames_with_at_least_30_landmarks": 79,
+        "dense_readiness_heuristic": true,
+        "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
+      },
+      "surface_kind": "regularized_tunnel",
+      "raw_triangles": 163903,
+      "refined_triangles": 68736,
+      "supported_vertices": 30237,
+      "inferred_vertices": 4323,
+      "raw_boundary_edges": 11239,
+      "refined_boundary_edges": 384,
+      "closed_boundary_edges": 0,
+      "prior_rejection": null,
+      "raw_localization": {
+        "detections": 2484,
+        "hit_count": 170318,
+        "requested_count": 235369,
+        "usable_count": 232624,
+        "ray_backend": "gpu"
+      },
+      "refined_localization": {
+        "detections": 2484,
+        "hit_count": 59566,
+        "requested_count": 235369,
+        "usable_count": 232624,
+        "observations_by_status": {
+          "no_original_surface_evidence": 65051,
+          "outside_fitted_segment": 105977,
+          "hit": 59566,
+          "excessive_relocation": 3306,
+          "no_surface_hit": 1469
+        },
+        "candidates_with_mapped_points": 858,
+        "supported_hit_count": 57824,
+        "inferred_hit_count": 1742,
+        "max_allowed_displacement_sfm_unit": 0.5015567207273197,
+        "accepted_displacement_median": 0.07082796096801774,
+        "accepted_displacement_p95": 0.3128591775894166
+      },
+      "multiview": {
+        "candidate_observations": 2484,
+        "evidence_groups": 1332,
+        "groups_with_multiple_observations": 318,
+        "observations_with_repeated_pixel_evidence": 1536,
+        "same_frame_merge_conflicts_rejected": 401,
+        "view_checks": {
+          "geometry_inconclusive": 3600,
+          "supports_candidate": 3822,
+          "not_repeated": 938,
+          "ambiguous_response": 236
+        }
+      },
+      "viewer_verification": {
+        "initial": {
+          "frame": 39,
+          "surface": "regularized",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 68736,
+          "currentCandidates": 25,
+          "selected": null,
+          "markerCount": 1693,
+          "glError": 0
+        },
+        "setup": {
+          "frame": 39,
+          "id": "frame_00000199-d0",
+          "count": 79,
+          "surfaceKind": "regularized_tunnel",
+          "hasRefinement": true
+        },
+        "comparisons": [
+          {
+            "frame": 39,
+            "surface": "regularized",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 68736,
+            "currentCandidates": 25,
+            "selected": "frame_00000199-d0",
+            "markerCount": 1693,
+            "glError": 0
+          },
+          {
+            "frame": 39,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 163903,
+            "currentCandidates": 25,
+            "selected": "frame_00000199-d0",
+            "markerCount": 2027,
+            "glError": 0
+          }
+        ],
+        "follow": {
+          "frame": 39,
+          "surface": "regularized",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 68736,
+          "currentCandidates": 25,
+          "selected": "frame_00000199-d0",
+          "markerCount": 1693,
+          "glError": 0
+        },
+        "last": {
+          "frame": 78,
+          "surface": "raw",
+          "lens": "SIMPLE_RADIAL",
+          "projection": "virtual_perspective",
+          "triangles": 163903,
+          "currentCandidates": 35,
+          "selected": null,
+          "markerCount": 2721,
+          "glError": 0
+        },
+        "projection": {
+          "model": "SIMPLE_RADIAL",
+          "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
+          "max_pixel_error": 2.6072230489931267e-10,
+          "samples": 20
+        },
+        "repeated": {
+          "before": 28,
+          "after": 11
+        },
+        "linkedView": {
+          "before": {
+            "frame": 0,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 163903,
+            "currentCandidates": 28,
+            "selected": "frame_00000004-d0",
+            "markerCount": 685,
+            "glError": 0
+          },
+          "after": {
+            "frame": 1,
+            "surface": "raw",
+            "lens": "SIMPLE_RADIAL",
+            "projection": "virtual_perspective",
+            "triangles": 163903,
+            "currentCandidates": 29,
+            "selected": "frame_00000006-d1",
+            "markerCount": 660,
+            "glError": 0
+          }
+        },
+        "exceptions": [],
+        "ready": {
+          "rendered": "true",
+          "glError": "0",
+          "ready": "true",
+          "textureResized": "raw:16384x3669→8192x1834",
+          "texture": "loaded"
+        }
+      },
+      "preview": "rail_test/assets/frame_00000199.jpg"
+    },
+    {
+      "id": "tumvi_fisheye",
+      "title": "TUM VI 走廊 · 已标定鱼眼相机",
+      "source": "https://cvg.cit.tum.de/data/datasets/visual-inertial-dataset",
+      "camera_description": "TUM VI calibrated monochrome wide-angle cam0, indoor corridor; original stereo/IMU not fused",
+      "review_notes": [
+        "低纹理墙面仍有明显缺口；当前结果是局部观测表面，不代表完整走廊模型。",
+        "门框等结构边缘可触发重复候选，多帧证据不等于确认裂缝。"
+      ],
+      "video_sha256": "a29ed25aa4d6bbdfdb15607496125669c0a567c99cc93f16cfeb2798b65c7ed2",
+      "sample_hz": 6.0,
+      "input_images": 179,
+      "registered_images": 179,
+      "points3D": 4519,
+      "reprojection_error_px": 0.33987690952045924,
+      "baseline": {
+        "sample_hz": 2,
+        "input_images": 60,
+        "registered_images": 10,
+        "points3D": 293,
+        "reprojection_error_px": 0.8396178001084393
+      },
+      "audit": {
+        "registered_images": 179,
+        "tracks_per_registered_image": {
+          "min": 64,
+          "median": 151.0,
+          "p10": 91.8
+        },
+        "point_max_triangulation_angle_degrees": {
+          "median": 12.979153056298882,
+          "p10": 2.997253699481759
+        },
+        "frames_with_at_least_30_landmarks": 179,
+        "dense_readiness_heuristic": true,
+        "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
+      },
+      "surface_kind": "observed_smoothed",
+      "raw_triangles": 390413,
+      "refined_triangles": 390035,
+      "supported_vertices": 203234,
+      "inferred_vertices": 0,
+      "raw_boundary_edges": 23105,
+      "refined_boundary_edges": 22623,
+      "closed_boundary_edges": null,
+      "prior_rejection": "Capture profile requests observed geometry only",
+      "raw_localization": {
+        "detections": 2259,
+        "hit_count": 187568,
+        "requested_count": 210146,
+        "usable_count": 210146,
+        "ray_backend": "gpu"
+      },
+      "refined_localization": {
+        "detections": 2259,
+        "hit_count": 160518,
+        "requested_count": 210146,
+        "usable_count": 210146,
+        "observations_by_status": {
+          "no_original_surface_evidence": 22578,
+          "excessive_relocation": 26402,
+          "hit": 160518,
+          "no_surface_hit": 648
+        },
+        "candidates_with_mapped_points": 2229,
+        "supported_hit_count": 160518,
+        "inferred_hit_count": 0,
+        "max_allowed_displacement_sfm_unit": 0.0043580484534695586,
+        "accepted_displacement_median": 0.000582456588744868,
+        "accepted_displacement_p95": 0.0033495262265205634
+      },
+      "multiview": {
+        "candidate_observations": 2259,
+        "evidence_groups": 1308,
+        "groups_with_multiple_observations": 242,
+        "observations_with_repeated_pixel_evidence": 1285,
+        "same_frame_merge_conflicts_rejected": 452,
+        "view_checks": {
+          "geometry_inconclusive": 5257,
+          "supports_candidate": 3119,
+          "ambiguous_response": 142,
+          "not_repeated": 323
+        }
+      },
+      "viewer_verification": {
+        "initial": {
+          "frame": 89,
+          "surface": "regularized",
+          "lens": "OPENCV_FISHEYE",
+          "projection": "virtual_perspective",
+          "triangles": 390035,
+          "currentCandidates": 12,
+          "selected": null,
+          "markerCount": 896,
+          "glError": 0
+        },
+        "setup": {
+          "frame": 89,
+          "id": "frame_00000297-d0",
+          "count": 179,
+          "surfaceKind": "observed_smoothed",
+          "hasRefinement": true
+        },
+        "comparisons": [
+          {
+            "frame": 89,
+            "surface": "regularized",
+            "lens": "OPENCV_FISHEYE",
+            "projection": "virtual_perspective",
+            "triangles": 390035,
+            "currentCandidates": 12,
+            "selected": "frame_00000297-d0",
+            "markerCount": 896,
+            "glError": 0
+          },
+          {
+            "frame": 89,
+            "surface": "raw",
+            "lens": "OPENCV_FISHEYE",
+            "projection": "virtual_perspective",
+            "triangles": 390413,
+            "currentCandidates": 12,
+            "selected": "frame_00000297-d0",
+            "markerCount": 975,
+            "glError": 0
+          }
+        ],
+        "follow": {
+          "frame": 89,
+          "surface": "regularized",
+          "lens": "OPENCV_FISHEYE",
+          "projection": "virtual_perspective",
+          "triangles": 390035,
+          "currentCandidates": 12,
+          "selected": "frame_00000297-d0",
+          "markerCount": 896,
+          "glError": 0
+        },
+        "last": {
+          "frame": 178,
+          "surface": "raw",
+          "lens": "OPENCV_FISHEYE",
+          "projection": "virtual_perspective",
+          "triangles": 390413,
+          "currentCandidates": 10,
+          "selected": null,
+          "markerCount": 765,
+          "glError": 0
+        },
+        "projection": {
+          "model": "OPENCV_FISHEYE",
+          "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
+          "max_pixel_error": 2.5421149729252077e-13,
+          "samples": 20
+        },
+        "repeated": {
+          "before": 15,
+          "after": 4
+        },
+        "linkedView": {
+          "before": {
+            "frame": 0,
+            "surface": "raw",
+            "lens": "OPENCV_FISHEYE",
+            "projection": "virtual_perspective",
+            "triangles": 390413,
+            "currentCandidates": 15,
+            "selected": "frame_00000003-d11",
+            "markerCount": 993,
+            "glError": 0
+          },
+          "after": {
+            "frame": 1,
+            "surface": "raw",
+            "lens": "OPENCV_FISHEYE",
+            "projection": "virtual_perspective",
+            "triangles": 390413,
+            "currentCandidates": 12,
+            "selected": "frame_00000006-d9",
+            "markerCount": 1103,
+            "glError": 0
+          }
+        },
+        "exceptions": [],
+        "ready": {
+          "rendered": "true",
+          "glError": "0",
+          "ready": "true",
+          "texture": "loaded"
+        }
+      },
+      "preview": "tumvi_fisheye/assets/frame_00000297.jpg"
+    }
+  ],
+  "recognition": {
+    "dataset": "CTCD official val used as final holdout",
+    "images": 42,
+    "ids": [
+      "1015-7",
+      "1017-5",
+      "133-1",
+      "133-3",
+      "139-3",
+      "1579-3",
+      "1583-5",
+      "1663-1",
+      "1676-1",
+      "170-3",
+      "170-5",
+      "175-3",
+      "185-10",
+      "185-4",
+      "195-7",
+      "282-5",
+      "371-3",
+      "577-5",
+      "58-3",
+      "58-5",
+      "58-7",
+      "584-1",
+      "59-3",
+      "802-11",
+      "802-13",
+      "802-14",
+      "804-1",
+      "832-7",
+      "842-1",
+      "842-10",
+      "842-6",
+      "858-3",
+      "864-10",
+      "864-7",
+      "869-1",
+      "869-3",
+      "869-7",
+      "870-5",
+      "870-7",
+      "872-3",
+      "987-7",
+      "991-7"
+    ],
+    "baseline_fixed": {
+      "threshold": 0.7,
+      "precision": 0.3433931088108082,
+      "recall": 0.7666476794965688,
+      "f1": 0.4743276693937487,
+      "iou": 0.3108974711531058,
+      "tp": 28264,
+      "fp": 54044,
+      "fn": 8603,
+      "macro_f1": 0.4613494684127253
+    },
+    "baseline_validation_calibrated": {
+      "threshold": 0.85,
+      "precision": 0.37913366828465184,
+      "recall": 0.7245775354653213,
+      "f1": 0.4977964127649662,
+      "iou": 0.331377462412544,
+      "tp": 26713,
+      "fp": 43745,
+      "fn": 10154,
+      "macro_f1": 0.4824429152219434
+    },
+    "adapted_validation_selected": {
+      "threshold": 0.85,
+      "precision": 0.679882706618698,
+      "recall": 0.7483928716738547,
+      "f1": 0.7124946739144469,
+      "iou": 0.553391632235549,
+      "tp": 27591,
+      "fp": 12991,
+      "fn": 9276,
+      "macro_f1": 0.7156561471752967
+    },
+    "selected_epoch": 35,
+    "checkpoint_sha256": "cad44707520ac4a8c7557ff0acaa5eba7a39216a34b764790fb8f01321ed7583",
+    "limits": [
+      "Pixel metrics on the official file split, not guaranteed unseen tunnels or full-video defect accuracy.",
+      "Threshold and epoch were frozen using only the development validation split.",
+      "Upstream pretraining membership is not fully documented; this holdout is independent of the local domain-adaptation training, not a proven pretraining-disjoint benchmark."
+    ]
+  },
+  "adaptation_protocol": {
+    "training_images": 176,
+    "validation_images": 44,
+    "holdout_images": 42,
+    "excluded_training_tiles_sharing_holdout_prefix": 30,
+    "decision_threshold": 0.85,
+    "selected_epoch": 35,
+    "checkpoint_sha256": "cad44707520ac4a8c7557ff0acaa5eba7a39216a34b764790fb8f01321ed7583"
+  },
+  "limits": [
+    "Internal camera/mesh checks do not establish survey accuracy or metric scale.",
+    "Rail short and TUM final results use 6 Hz instead of the 2 Hz baseline; this is an explicit additional sampling budget.",
+    "Pixel holdout scores concern local adaptation with source-prefix exclusion; these images were also seen during exploratory trials, and upstream pretraining and physical tunnel separation are unverified.",
+    "Multi-view groups remain unreviewed and can retain seams or writing; no video-level detection precision was measured."
+  ]
+}

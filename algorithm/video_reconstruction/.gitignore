@@ -1,5 +1,6 @@
 # Generated data, environments, downloads and browser profiles
 /.venv/
+/.venv-global/
 /venv/
 /data/
 /results/
@@ -16,6 +17,8 @@ __pycache__/
 *.ply
 *.db
 *.log
+*.log.*
+/research_sources/multiscene/
 *.part
 *.webm
 .env
