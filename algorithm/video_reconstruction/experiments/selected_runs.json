@@ -1,0 +1,43 @@
+[
+  {
+    "id": "dvp_handheld",
+    "title": "DVP 人行隧道 · 手持手机",
+    "run": "results/multiscene_v1/dvp_handheld__optimized/reconstruction",
+    "frames": "results/multiscene_v1/dvp_handheld__optimized/frames",
+    "prior": "auto",
+    "author": "Sikander Iqbal",
+    "license": "CC BY-SA 4.0",
+    "browser_video": true
+  },
+  {
+    "id": "rail_train",
+    "title": "铁路隧道长片 · 前视相机",
+    "run": "results/multiscene_v2/rail_train__optimized/self_calibrated_global",
+    "frames": "results/multiscene_v2/rail_train__optimized/frames",
+    "prior": "auto",
+    "author": "leven87 仓库提供；原视频作者未核实",
+    "license": "媒体单独许可未核实",
+    "browser_video": true
+  },
+  {
+    "id": "rail_test",
+    "title": "铁路隧道短片 · 快速前视",
+    "run": "results/multiscene_v3_dense_sampling/rail_test__optimized/global_reconstruction",
+    "frames": "results/multiscene_v3_dense_sampling/rail_test__optimized/frames",
+    "prior": "auto",
+    "author": "leven87 仓库提供；原视频作者未核实",
+    "license": "媒体单独许可未核实",
+    "browser_video": true
+  },
+  {
+    "id": "tumvi_fisheye",
+    "title": "TUM VI 走廊 · 已标定鱼眼相机",
+    "review_notes": ["低纹理墙面仍有明显缺口；当前结果是局部观测表面，不代表完整走廊模型。", "门框等结构边缘可触发重复候选，多帧证据不等于确认裂缝。"],
+    "run": "results/multiscene_v3_dense_sampling/tumvi_fisheye__optimized/global_reconstruction",
+    "frames": "results/multiscene_v3_dense_sampling/tumvi_fisheye__optimized/frames",
+    "prior": "observed_only",
+    "author": "TUM VI 数据集 / Schubert 等",
+    "license": "CC BY 4.0",
+    "browser_video": false
+  }
+]

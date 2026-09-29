@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -68,20 +69,36 @@ def main():
     parser.add_argument('--images', required=True, help='原始帧目录（须与重建所用图像一致）')
     parser.add_argument('--out', required=True, help='输出目录')
     parser.add_argument('--repo', default='third_party/crack-seg')
-    parser.add_argument('--checkpoint', default='data/crack_model/unet_v3.pth')
+    parser.add_argument('--checkpoint', help='Checkpoint; defaults to the model profile or the original pretrained model')
+    parser.add_argument('--model-profile',help='Validated checkpoint identity and validation-selected threshold')
+    parser.add_argument('--valid-mask',help='Optional camera validity mask in original pixel geometry')
     parser.add_argument('--scene', help='scene.json，用于取其 scene_id 写入检测结果')
-    parser.add_argument('--threshold', type=float, default=0.5)
+    parser.add_argument('--threshold', type=float, default=None)
     parser.add_argument('--min-area', type=int, default=60, help='小于该像素数的连通域视为噪声')
     parser.add_argument('--max-points', type=int, default=120, help='每个病害最多保留的像素点')
     parser.add_argument('--max-images', type=int, default=0, help='0 表示不限制')
     parser.add_argument('--overlay', action='store_true', help='额外输出叠加图便于目检')
     parser.add_argument('--device', choices=['cpu', 'cuda'])
     args = parser.parse_args()
+    root = Path(__file__).resolve().parent
+    profile={}
+    if args.model_profile:
+        profile_path=Path(args.model_profile).resolve();profile=json.loads(profile_path.read_text('utf-8'))
+        if not args.checkpoint:args.checkpoint=str(profile_path.parent/profile['checkpoint'])
+    args.checkpoint=args.checkpoint or 'data/crack_model/unet_v3.pth'
+    threshold_origin='cli' if args.threshold is not None else ('validation_profile' if profile else 'legacy_default')
+    if args.threshold is None:args.threshold=profile.get('decision_threshold',.5)
+    checkpoint=root/args.checkpoint;checkpoint_sha=hashlib.sha256(checkpoint.read_bytes()).hexdigest()
+    if profile and checkpoint_sha!=profile['checkpoint_sha256']:raise ValueError('Checkpoint does not match validated model profile')
     if not 0 < args.threshold < 1 or args.min_area < 1 or args.max_points < 1:
         raise ValueError('threshold must be in (0,1), min-area and max-points positive')
 
     import cv2
-    root = Path(__file__).resolve().parent
+    valid_mask=None
+    if args.valid_mask:
+        valid_mask=cv2.imdecode(np.fromfile(args.valid_mask,dtype=np.uint8),cv2.IMREAD_GRAYSCALE)
+        if valid_mask is None:raise ValueError('Cannot decode camera validity mask')
+        valid_mask=valid_mask>0
     images_dir, out_dir = Path(args.images), Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     if (out_dir / 'detections.json').exists():
@@ -115,6 +132,10 @@ def main():
         if probs.shape != rgb.shape[:2] or not np.isfinite(probs).all():
             raise ValueError('Model probability map must be finite and match original image size')
         mask = (mask > 0).astype(np.uint8)
+        if valid_mask is not None:
+            if valid_mask.shape!=mask.shape:raise ValueError('Camera validity mask resolution differs from original frame')
+            mask[~valid_mask]=0
+        ratio=float(mask.mean())
         cv2.imencode('.png', mask * 255)[1].tofile(out_dir / 'masks' / (path.stem + '.png'))
         regions = components(mask, args.min_area)
         for j, (ys, xs) in enumerate(regions):
@@ -134,19 +155,22 @@ def main():
             overlay[mask > 0] = (0, 0, 255)
             cv2.imencode('.png', cv2.addWeighted(bgr, 0.6, overlay, 0.4, 0))[1].tofile(out_dir / 'overlay' / path.name)
         if i % 10 == 0 or i == len(files):
-            print(f'  [{i}/{len(files)}] {time.time()-start:.0f}s 累计病害 {len(detections)}', flush=True)
+            print(f'  [{i}/{len(files)}] {time.time()-start:.0f}s 累计候选观测 {len(detections)}', flush=True)
 
     result = {'coordinate_space': 'original_image_pixels', 'scene_id': scene_id,
-              'detector': {'name': 'crack-seg U-Net (third-party, UNLICENSED)',
-                           'weights': str(args.checkpoint), 'threshold': args.threshold,
+              'detector': {'name': profile.get('name','crack-seg U-Net (external architecture)'),
+                           'weights': str(args.checkpoint), 'checkpoint_sha256':checkpoint_sha,'threshold': args.threshold,
+                           'threshold_origin':threshold_origin,'validation_profile':profile or None,
+                           'camera_validity_mask_applied':valid_mask is not None,
                            'device': str(device), 'min_area_px': args.min_area},
               'detections': detections,
               'per_image': stats,
-              'limits': ['模型为桥梁/路面近景裂缝训练，隧道内壁属跨域，指标不可直接引用。',
+              'limits': ['模型属于裂缝候选分割；标注集上的像素指标不代表这些视频的病害准确率。',
+                         'CTCD 域适配仅在传入对应模型档案时启用；上游结构与权重的许可需单独核实。',
                          'confidence 是掩码内平均概率，不代表定位精度。',
                          '像素已抽稀到每病害 %d 点，用于射线求交。' % args.max_points]}
     (out_dir / 'detections.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), 'utf-8')
-    print(f'\n[完成] 病害 {len(detections)} 个，涉及 {len([s for s in stats if s["regions"]])} 帧，'
+    print(f'\n[完成] 候选观测 {len(detections)} 个，涉及 {len([s for s in stats if s["regions"]])} 帧，'
           f'耗时 {time.time()-start:.0f}s -> {out_dir / "detections.json"}', flush=True)
 
 

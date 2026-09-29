@@ -19,8 +19,11 @@ def main():
     raw=localize(scene,detections,mesh,load_ray_caster(args.backend))
     original_by_id={d['id']:d for d in original['defects']}
     tolerance=2*report['local_support_threshold_sfm_unit']
-    origin=np.array(report['coordinate_origin']);axis=np.array(report['coordinate_basis_rows'])[2]
-    lo,hi=report['station_range'];counts=Counter();displacements=[]
+    axial=report.get('surface_kind','regularized_tunnel')=='regularized_tunnel'
+    if axial:
+        origin=np.array(report['coordinate_origin']);axis=np.array(report['coordinate_basis_rows'])[2]
+        lo,hi=report['station_range']
+    counts=Counter();displacements=[]
     for item in raw['defects']:
         reference=original_by_id[item['id']];points=[];item['supported_hit_count']=0;item['inferred_hit_count']=0
         assert len(reference['observations'])==len(item['observations'])
@@ -29,7 +32,7 @@ def main():
             obs['original_point']=ref['point'];obs['original_status']=ref['status']
             reason=obs['status']
             if ref['status']!='hit':reason='no_original_surface_evidence'
-            elif not lo<=float((np.array(ref['point'])-origin)@axis)<=hi:reason='outside_fitted_segment'
+            elif axial and not lo<=float((np.array(ref['point'])-origin)@axis)<=hi:reason='outside_fitted_segment'
             elif obs['status']=='hit':
                 distance=float(np.linalg.norm(np.array(obs['point'])-ref['point']))
                 obs['displacement_sfm_unit']=distance
@@ -44,12 +47,13 @@ def main():
             obs['status']=reason;counts[reason]+=1
         item['points']=points;item['hit_count']=len(points)
         item['status']='partial' if points else 'no_accepted_fitted_hit'
-    raw['surface_id']=report['surface_id'];raw['surface_kind']='regularized_tunnel'
+    raw['surface_id']=report['surface_id'];raw['surface_kind']=report.get('surface_kind','regularized_tunnel')
     raw['summary'].update(hit_count=sum(d['hit_count'] for d in raw['defects']),
       observations_by_status=dict(counts),candidates_with_mapped_points=sum(bool(d['points']) for d in raw['defects']),
       supported_hit_count=sum(d['supported_hit_count'] for d in raw['defects']),inferred_hit_count=sum(d['inferred_hit_count'] for d in raw['defects']),
       max_allowed_displacement_sfm_unit=tolerance,
-      accepted_displacement_median=float(np.median(displacements)),accepted_displacement_p95=float(np.quantile(displacements,.95)))
+      accepted_displacement_median=float(np.median(displacements)) if displacements else None,
+      accepted_displacement_p95=float(np.quantile(displacements,.95)) if displacements else None)
     raw['limits']+=['Accepted points require an original mesh hit on the same image ray, within the fitted segment and bounded displacement.',
                      'Mapping to a regularized surface is a display association; it does not improve calibrated defect coordinate accuracy.']
     (out/'localized.json').write_text(json.dumps(raw,ensure_ascii=False,allow_nan=False,separators=(',',':')),'utf-8')

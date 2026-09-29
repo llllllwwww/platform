@@ -1,0 +1,10 @@
+{
+  "model": "OPENCV_FISHEYE",
+  "width": 512,
+  "height": 512,
+  "params": [190.97847715128717, 190.9733070521226, 255.43170605935475, 257.3974428996504, 0.0034823894022493434, 0.0007150348452162257, -0.0020532361418706202, 0.00020293673591811182],
+  "source": "TUM VI corridor4, dso/camchain.yaml, cam0; CC BY 4.0",
+  "principal_point_conversion": "OpenCV pixel centers 0 -> COLMAP pixel centers 0.5; cx and cy already shifted",
+  "metric_scale": "not established; this example reconstructs cam0 only",
+  "scope": "Example for these exact 512x512 TUM VI frames; do not reuse these intrinsics for a different camera"
+}

@@ -50,6 +50,7 @@ def commands(args):
     py('export_web.py','--scene',run/'scene.json','--localized',run/'localized.json','--detections',run/'detect/detections.json',
        '--textured-mesh',run/'dense/textured/mesh.ply','--texture',run/'dense/textured/texture.png',
        '--images',frames/'images','--frames',frames/'frames.json','--video',video,'--quality',run/'quality.json',
+       '--source-metadata',ROOT/'experiments/dvp_source.json','--title','DVP 人行隧道 · 视频重建',
        '--out',ROOT/'web',*extra)
     return calls,run,frames
 

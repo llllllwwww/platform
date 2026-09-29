@@ -35,11 +35,15 @@ def topology(vertices,faces):
 
 def coordinate_frame(cameras):
     centers=np.array([c['center'] for c in cameras]);origin=np.median(centers,axis=0)
+    if len(centers)<3 or not np.isfinite(centers).all():raise ValueError('At least three finite camera centers required')
     _,singular,vt=np.linalg.svd(centers-centers.mean(0),full_matrices=False)
+    if singular[0]<1e-8:raise ValueError('No measurable camera translation for an axial prior')
     if singular[1]/singular[0]>.15:raise ValueError('Trajectory is too curved for the straight-axis model; use segmented centerline fitting')
-    t=vt[0];t*=np.sign((centers[-1]-centers[0])@t)
+    t=vt[0];t*=1 if (centers[-1]-centers[0])@t>=0 else -1
     up=-np.mean([np.asarray(c['world_to_camera'])[1,:3] for c in cameras],axis=0)
-    up-=t*(up@t);up/=np.linalg.norm(up)
+    up-=t*(up@t)
+    if np.linalg.norm(up)<1e-8:raise ValueError('Camera up vectors do not define a stable cross-section frame')
+    up/=np.linalg.norm(up)
     u=np.cross(up,t);u/=np.linalg.norm(u)
     return origin,np.array([u,np.cross(t,u),t]),float(singular[1]/singular[0])
 
@@ -116,11 +120,10 @@ def choose_domain(points):
     if last+1<len(rows) and rows[last+1,1]>.5:last+=1
     return (float(edges[first]),float(edges[last+1])),{'section_bin_width':float(edges[1]-edges[0]),'coverage_threshold':.7,'range_bins':[int(first),int(last)],'coverage':[r[1] for r in rows]}
 
-def main():
-    p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--run',default=str(ROOT/'results/dvp_tunnel'))
-    p.add_argument('--rings',type=int,default=180);p.add_argument('--angles',type=int,default=192)
-    args=p.parse_args();run=Path(args.run);out=run/'regularization';out.mkdir(exist_ok=True)
+def regularize(run,rings=180,angles=192):
+    args=argparse.Namespace(rings=rings,angles=angles)
+    if rings<4 or angles<12:raise ValueError('Insufficient structured-mesh resolution')
+    run=Path(run);out=run/'regularization';out.mkdir(exist_ok=True)
     scene=json.loads((run/'scene.json').read_text('utf-8'))
     with np.load(run/'surface.npz') as m:vertices=m['vertices'].copy();faces=m['faces'].copy()
     origin,basis,curvature=coordinate_frame(scene['cameras']);points=(vertices-origin)@basis.T
@@ -142,6 +145,9 @@ def main():
     near=cKDTree(observed).query(local)[0]
     tol=max(.035*float(np.median(radius)),3*fit['robust_cell_residual_scale'])
     supported=near<=tol
+    if float((~supported).mean())>.45:raise ValueError('More than 45% of fitted vertices lack local observation support')
+    if fit['internal_holdout_p95_absolute_radial_error']>.3*float(np.median(radius)):
+        raise ValueError('Cross-section residual is too large for the structural prior')
     geometry_id=hashlib.sha256(np.asarray(regular,dtype='<f4').tobytes()+f.tobytes()).hexdigest()[:20]
     np.savez_compressed(out/'surface_regularized.npz',vertices=regular.astype(np.float32),faces=f,
         scene_id=scene['scene_id'],surface_id=geometry_id,support=supported.astype(np.uint8),distance_to_observation=near.astype(np.float32))
@@ -167,7 +173,7 @@ def main():
     raw_top=topology(vertices,faces);reg_top=topology(regular,f);closed_top=topology(closed_vertices,closed_faces)
     assert reg_top['boundary_edges']==2*args.angles and reg_top['nonmanifold_edges']==0
     assert closed_top['boundary_edges']==0 and closed_top['euler_characteristic']==2 and closed_top['degenerate_faces']==0
-    report={'scene_id':scene['scene_id'],'surface_id':geometry_id,'closed_surface_id':closed_id,'method':'robust cubic B-spline along axis / periodic Fourier cross section, followed by structured remeshing',
+    report={'scene_id':scene['scene_id'],'surface_id':geometry_id,'surface_kind':'regularized_tunnel','closed_surface_id':closed_id,'method':'robust cubic B-spline along axis / periodic Fourier cross section, followed by structured remeshing',
       'coordinate_origin':origin.tolist(),'coordinate_basis_rows':basis.tolist(),'axis_bending_ratio':curvature,'station_range':domain,
       'observed_vertices_used':len(observed),'observed_vertices_excluded_outside_range':int((~crop).sum()),'domain_selection':domain_info,
       'fit':fit,'knots':knots.tolist(),'coefficients':coef.tolist(),'raw_topology':raw_top,'regularized_topology':reg_top,'closed_topology':closed_top,
@@ -179,5 +185,13 @@ def main():
                 'Coordinates remain relative SfM units; no assumed physical diameter.']}
     (out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),'utf-8')
     print(json.dumps({k:report[k] for k in ['station_range','fit','raw_topology','regularized_topology','closed_topology','supported_vertices','inferred_vertices']},ensure_ascii=False,indent=2))
+
+    return report
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--run',default=str(ROOT/'results/dvp_tunnel'))
+    p.add_argument('--rings',type=int,default=180);p.add_argument('--angles',type=int,default=192)
+    args=p.parse_args();regularize(args.run,args.rings,args.angles)
 
 if __name__=='__main__':main()
