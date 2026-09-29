@@ -123,7 +123,59 @@ def choose_domain(points,min_coverage=.7,min_points=150):
     if last+1<len(rows) and rows[last+1,1]>.5:last+=1
     return (float(edges[first]),float(edges[last+1])),{'section_bin_width':float(edges[1]-edges[0]),'coverage_threshold':float(min_coverage),'min_points':int(min_points),'range_bins':[int(first),int(last)],'coverage':[r[1] for r in rows]}
 
-def regularize(run,rings=180,angles=192,warp_axial=False,real_length=0.0,domain_coverage=.7,domain_points=150,max_unsupported=.45,fit_order=12,residual_gate=.3,control_stations=7):
+def fit_circle_kasa(x,y):
+    """Kasa algebraic circle fit; returns (cx,cy,R)."""
+    A=np.column_stack([2*x,2*y,np.ones_like(x)]);b=x*x+y*y
+    sol,_,_,_=np.linalg.lstsq(A,b,rcond=None)
+    cx,cy,c=float(sol[0]),float(sol[1]),float(sol[2])
+    R=c+cx*cx+cy*cy
+    if R<=0:raise ValueError('Degenerate circle fit')
+    return cx,cy,float(np.sqrt(R))
+
+def estimate_circle(observed,domain,n_stations=32):
+    """Per-station circle fits, then a robust median of centre/radius."""
+    s=observed[:,2];edges=np.linspace(*domain,n_stations+1);fits=[]
+    for lo,hi in zip(edges[:-1],edges[1:]):
+        q=observed[(s>=lo)&(s<hi)]
+        if len(q)<30:continue
+        try:fits.append(fit_circle_kasa(q[:,0],q[:,1]))
+        except ValueError:continue
+    if len(fits)<3:raise ValueError('Not enough cross-section support for a circle estimate')
+    arr=np.asarray(fits)
+    return float(np.median(arr[:,0])),float(np.median(arr[:,1])),float(np.median(arr[:,2])),len(fits)
+
+def estimate_box(observed,domain,n_stations=32):
+    """Per-station axis-aligned extents (2%-98% quantiles), then a robust global median.
+
+    Per-station estimation survives skewed coverage (dense side walls, sparse
+    ceiling/floor, doorways) that would bias a single global quantile."""
+    s=observed[:,2];edges=np.linspace(*domain,n_stations+1);fits=[]
+    for lo,hi in zip(edges[:-1],edges[1:]):
+        q=observed[(s>=lo)&(s<hi)]
+        if len(q)<30:continue
+        xlo,xhi=np.quantile(q[:,0],[.02,.98]);ylo,yhi=np.quantile(q[:,1],[.02,.98])
+        fits.append([xhi-xlo,yhi-ylo,(xlo+xhi)/2,(ylo+yhi)/2])
+    if len(fits)<3:raise ValueError('Not enough cross-section support for a rectangle estimate')
+    arr=np.asarray(fits)
+    return float(np.median(arr[:,0])),float(np.median(arr[:,1])),float(np.median(arr[:,2])),float(np.median(arr[:,3])),len(fits)
+
+def box_profile(width,height,cx,cy,theta):
+    """Uniform-perimeter rectangle parameterization; theta in [-pi,pi).
+
+    Legs: bottom (left→right), right wall (bottom→top), top (right→left),
+    left wall (top→bottom)."""
+    t=(theta+np.pi)/(2*np.pi);per=2*(width+height);s=t*per
+    x=np.where(s<width,cx-width/2+s,
+      np.where(s<width+height,cx+width/2,
+      np.where(s<2*width+height,cx+width/2-(s-width-height),
+      np.where(s<2*width+2*height,cx-width/2,cx-width/2+(s-2*width-2*height)))))
+    y=np.where(s<width,cy-height/2,
+      np.where(s<width+height,cy-height/2+(s-width),
+      np.where(s<2*width+height,cy+height/2,
+      np.where(s<2*width+2*height,cy+height/2-(s-2*width-height),cy-height/2))))
+    return x,y
+
+def regularize(run,rings=180,angles=192,warp_axial=False,real_length=0.0,domain_coverage=.7,domain_points=150,max_unsupported=.45,fit_order=12,residual_gate=.3,control_stations=7,shape='prior',support_tol_fraction=.035):
     args=argparse.Namespace(rings=rings,angles=angles)
     if rings<4 or angles<12:raise ValueError('Insufficient structured-mesh resolution')
     run=Path(run);out=run/'regularization';out.mkdir(exist_ok=True)
@@ -161,11 +213,32 @@ def regularize(run,rings=180,angles=192,warp_axial=False,real_length=0.0,domain_
     _r=np.linalg.norm(observed[:,:2],axis=1);_rmed=float(np.median(_r))
     _band=( _r>0.35*_rmed)&(_r<2.5*_rmed)
     near_axis_removed=int((~_band).sum());observed=observed[_band]
-    knots,coef,cells,fit=fit_surface(observed,domain,order=fit_order,n_controls=control_stations)
-    st=np.linspace(*domain,args.rings);th=np.linspace(-np.pi,np.pi,args.angles,endpoint=False)
-    ss,tt=np.meshgrid(st,th,indexing='ij');radius=np.exp(design(ss.ravel(),tt.ravel(),knots,fit['order'])@coef).reshape(ss.shape)
-    if not np.isfinite(radius).all() or radius.min()<=0:raise ValueError('Fitted radial function is not a positive valid cross section')
-    local=np.stack([radius*np.cos(tt),radius*np.sin(tt),ss],axis=-1).reshape(-1,3)
+    if shape in ('cylinder','box'):
+        # Unity-primitive style: a single ideal cross-section estimated from the
+        # observations (robust centre/radius or width/height), extruded along the
+        # straight axis. The model deliberately does NOT follow measurement noise;
+        # observation distances are reported for honesty, not driven into the shape.
+        if shape=='cylinder':
+            pcx,pcy,prad,station_fits=estimate_circle(observed,domain)
+            fit={'shape':'cylinder','center_local':[pcx,pcy],'radius':prad,'stations_used':station_fits}
+            st=np.linspace(*domain,args.rings);th=np.linspace(-np.pi,np.pi,args.angles,endpoint=False)
+            ss,tt=np.meshgrid(st,th,indexing='ij')
+            local=np.stack([pcx+prad*np.cos(tt),pcy+prad*np.sin(tt),ss],axis=-1).reshape(-1,3)
+            radius=np.full_like(ss,prad)
+        else:
+            bw,bh,bcx,bcy,station_fits=estimate_box(observed,domain)
+            fit={'shape':'box','width':bw,'height':bh,'center_local':[bcx,bcy],'stations_used':station_fits}
+            st=np.linspace(*domain,args.rings);th=np.linspace(-np.pi,np.pi,args.angles,endpoint=False)
+            ss,tt=np.meshgrid(st,th,indexing='ij')
+            bx,by=box_profile(bw,bh,bcx,bcy,tt)
+            local=np.stack([bx,by,ss],axis=-1).reshape(-1,3)
+            radius=np.hypot(bx,by)
+    else:
+        knots,coef,cells,fit=fit_surface(observed,domain,order=fit_order,n_controls=control_stations)
+        st=np.linspace(*domain,args.rings);th=np.linspace(-np.pi,np.pi,args.angles,endpoint=False)
+        ss,tt=np.meshgrid(st,th,indexing='ij');radius=np.exp(design(ss.ravel(),tt.ravel(),knots,fit['order'])@coef).reshape(ss.shape)
+        if not np.isfinite(radius).all() or radius.min()<=0:raise ValueError('Fitted radial function is not a positive valid cross section')
+        local=np.stack([radius*np.cos(tt),radius*np.sin(tt),ss],axis=-1).reshape(-1,3)
     regular=local@basis+origin
     f=[]
     for i in range(args.rings-1):
@@ -175,10 +248,11 @@ def regularize(run,rings=180,angles=192,warp_axial=False,real_length=0.0,domain_
     f=np.asarray(f,dtype=np.int32)
     # Local measurement support, not probability of a defect or proof of dimensional accuracy.
     near=cKDTree(observed).query(local)[0]
-    tol=max(.035*float(np.median(radius)),3*fit['robust_cell_residual_scale'])
+    # prior-fitting tolerance is a surface-fit gate; primitive abstraction needs a wider band
+    tol=max(support_tol_fraction*float(np.median(radius)),3*fit.get('robust_cell_residual_scale',0))
     supported=near<=tol
     if float((~supported).mean())>max_unsupported:raise ValueError(f'More than {max_unsupported:.0%} of fitted vertices lack local observation support')
-    if fit['internal_holdout_p95_absolute_radial_error']>residual_gate*float(np.median(radius)):
+    if shape=='prior' and fit['internal_holdout_p95_absolute_radial_error']>residual_gate*float(np.median(radius)):
         raise ValueError(f'Cross-section residual {fit["internal_holdout_p95_absolute_radial_error"]:.4f} exceeds {residual_gate:.2f}x median radius {float(np.median(radius)):.4f}; raise --fit-order or relax --residual-gate deliberately')
     geometry_id=hashlib.sha256(np.asarray(regular,dtype='<f4').tobytes()+f.tobytes()).hexdigest()[:20]
     np.savez_compressed(out/'surface_regularized.npz',vertices=regular.astype(np.float32),faces=f,
@@ -205,18 +279,29 @@ def regularize(run,rings=180,angles=192,warp_axial=False,real_length=0.0,domain_
     raw_top=topology(vertices,faces);reg_top=topology(regular,f);closed_top=topology(closed_vertices,closed_faces)
     assert reg_top['boundary_edges']==2*args.angles and reg_top['nonmanifold_edges']==0
     assert closed_top['boundary_edges']==0 and closed_top['euler_characteristic']==2 and closed_top['degenerate_faces']==0
-    report={'scene_id':scene['scene_id'],'surface_id':geometry_id,'surface_kind':'regularized_tunnel','closed_surface_id':closed_id,'method':'robust cubic B-spline along axis / periodic Fourier cross section, followed by structured remeshing',
+    kind={'cylinder':'primitive_cylinder','box':'primitive_box'}.get(shape,'regularized_tunnel')
+    method={'cylinder':'ideal circle cross-section (robust centre/radius) extruded along the straight axis',
+            'box':'ideal rectangle cross-section (robust extents) extruded along the straight axis'}.get(shape,
+        'robust cubic B-spline along axis / periodic Fourier cross section, followed by structured remeshing')
+    report={'scene_id':scene['scene_id'],'surface_id':geometry_id,'surface_kind':kind,'closed_surface_id':closed_id,'method':method,
       'coordinate_origin':origin.tolist(),'coordinate_basis_rows':basis.tolist(),'axis_bending_ratio':curvature,'station_range':domain,
       'axial_velocity_warp':warp_info or {'applied':False},
       'domain_gates':{'min_coverage':float(domain_coverage),'min_points':int(domain_points),'max_unsupported_fraction':float(max_unsupported)},
       'observed_vertices_used':len(observed),'observed_vertices_excluded_outside_range':int((~crop).sum()),'near_axis_points_removed':near_axis_removed,'robust_radius_band':[0.35,2.5],'domain_selection':domain_info,
-      'fit':fit,'control_stations':control_stations,'knots':knots.tolist(),'coefficients':coef.tolist(),'raw_topology':raw_top,'regularized_topology':reg_top,'closed_topology':closed_top,
-      'local_support_threshold_sfm_unit':tol,'supported_vertices':int(supported.sum()),'inferred_vertices':int((~supported).sum()),
+      'fit':fit,'control_stations':control_stations,'knots':(knots.tolist() if shape=='prior' else []),'coefficients':(coef.tolist() if shape=='prior' else []),
+      'ideal_section_distance':{'median':float(np.median(near)),'p95':float(np.quantile(near,.95)),'max':float(near.max()),
+        'note':'distance from ideal-primitive vertices to nearest measured point; quantifies abstraction, not accuracy'},
+      'raw_topology':raw_top,'regularized_topology':reg_top,'closed_topology':closed_top,
+      'local_support_threshold_sfm_unit':tol,'support_tol_fraction':support_tol_fraction,'supported_vertices':int(supported.sum()),'inferred_vertices':int((~supported).sum()),
       'radial_range': [float(radius.min()),float(radius.max())],
-      'limits':['Shape prior for a short nearly straight star-shaped tunnel; not a deformation measurement.',
+      'limits':(['Idealised primitive geometry for simulation/display: the section is a single circle or rectangle estimated from measurements, and does NOT reproduce local deformation, lining joints or construction irregularities.',
                 'Continuous sidewalls/floor are inferred where observations are absent; two modeled segment ends intentionally remain open, not necessarily actual portals.',
                 'Closed export adds explicitly synthetic end caps and uses outward winding, not measured portal walls.',
-                'Coordinates remain relative SfM units; no assumed physical diameter.']}
+                'Coordinates remain relative SfM units; no assumed physical diameter.'] if shape in ('cylinder','box') else [
+                'Shape prior for a short nearly straight star-shaped tunnel; not a deformation measurement.',
+                'Continuous sidewalls/floor are inferred where observations are absent; two modeled segment ends intentionally remain open, not necessarily actual portals.',
+                'Closed export adds explicitly synthetic end caps and uses outward winding, not measured portal walls.',
+                'Coordinates remain relative SfM units; no assumed physical diameter.'])}
     (out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),'utf-8')
     print(json.dumps({k:report[k] for k in ['station_range','fit','raw_topology','regularized_topology','closed_topology','supported_vertices','inferred_vertices']},ensure_ascii=False,indent=2))
 
@@ -234,6 +319,8 @@ def main():
     p.add_argument('--fit-order',type=int,default=12,help='Fourier order of the cross-section; raise for rectangular/doorway profiles')
     p.add_argument('--residual-gate',type=float,default=.3,help='holdout p95 radial error limit as a fraction of median radius')
     p.add_argument('--control-stations',type=int,default=7,help='B-spline control stations along the axis; raise for doorways/structures')
-    args=p.parse_args();regularize(args.run,args.rings,args.angles,args.warp_axial,args.real_length,args.domain_coverage,args.domain_points,args.max_unsupported,args.fit_order,args.residual_gate,args.control_stations)
+    p.add_argument('--shape',choices=['prior','cylinder','box'],default='prior',help="prior=follow measurements with a smooth radial field; cylinder/box=Unity-primitive ideal geometry")
+    p.add_argument('--support-tol-fraction',type=float,default=.035,help='observation-support band as a fraction of median radius; primitive abstraction needs ~0.12')
+    args=p.parse_args();regularize(args.run,args.rings,args.angles,args.warp_axial,args.real_length,args.domain_coverage,args.domain_points,args.max_unsupported,args.fit_order,args.residual_gate,args.control_stations,args.shape,args.support_tol_fraction)
 
 if __name__=='__main__':main()

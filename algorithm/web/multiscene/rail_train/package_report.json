@@ -10,26 +10,25 @@
   "entry": "F:\\data\\中国研究生智慧城市技术与创意设计大赛\\.publish\\platform\\algorithm\\web\\multiscene\\rail_train\\index.html",
   "frame_evidence_count": 56,
   "regularized": {
-    "surface_id": "a8893a690edc3ba42fa2",
+    "surface_id": "84d0f8e3a6ab4a56320c",
     "triangles": 15232,
     "mapping": {
       "detections": 1759,
-      "hit_count": 3929,
+      "hit_count": 13058,
       "requested_count": 166594,
       "usable_count": 164934,
       "observations_by_status": {
         "no_original_surface_evidence": 50852,
-        "outside_fitted_segment": 94137,
-        "no_surface_hit": 1356,
-        "excessive_relocation": 16320,
-        "hit": 3929
+        "no_surface_hit": 95248,
+        "excessive_relocation": 7436,
+        "hit": 13058
       },
-      "candidates_with_mapped_points": 77,
-      "supported_hit_count": 1688,
-      "inferred_hit_count": 2241,
-      "max_allowed_displacement_sfm_unit": 0.21556721208797588,
-      "accepted_displacement_median": 0.13591480255126948,
-      "accepted_displacement_p95": 0.2082885503768919
+      "candidates_with_mapped_points": 177,
+      "supported_hit_count": 11427,
+      "inferred_hit_count": 1631,
+      "max_allowed_displacement_sfm_unit": 0.7062411823926086,
+      "accepted_displacement_median": 0.4156400561332701,
+      "accepted_displacement_p95": 0.6555874466896057
     }
   }
 }

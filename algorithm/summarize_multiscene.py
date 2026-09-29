@@ -82,7 +82,7 @@ def main():
     out=ROOT/'web/multiscene';out.mkdir(parents=True,exist_ok=True);examples(folder,out/'recognition_examples.png')
     cards=[];table=[];inspection=[]
     for r in rows:
-        method='断面拟合' if r['surface_kind']=='regularized_tunnel' else '局部观测 · 有缺口'
+        method={'regularized_tunnel':'断面拟合','primitive_cylinder':'规则几何 · 圆柱','primitive_box':'规则几何 · 长方体'}.get(r['surface_kind'],'局部观测 · 有缺口')
         cards.append(f'<a class="card" href="{r["id"]}/index.html"><img src="{r["preview"]}" alt="所选原始帧"><div><span class="tag">{method}</span><h2>{html.escape(r["title"])}</h2><p>{r["registered_images"]}/{r["input_images"]} 帧 · {r["points3D"]:,} 稀疏点 · {r["refined_triangles"]:,} 面</p><b>打开三维与影像复核 →</b></div></a>')
         b=r['baseline'];mp=r.get('mesh_postprocess');mp_text='—' if not mp else f"×{mp['extent_shrink_factor']:.2f} · 填 {mp['holes_filled']} 孔"
         table.append(f'<tr><td>{html.escape(r["title"])}</td><td>{b["registered_images"]}/{b["input_images"]}</td><td>{r["registered_images"]}/{r["input_images"]}</td><td>2 → {r["sample_hz"]:g} Hz</td><td>{fmt(b["reprojection_error_px"])} → {r["reprojection_error_px"]:.3f}</td><td>{mp_text}</td></tr>')

@@ -90,12 +90,14 @@ def main():
     p.add_argument('--max-unsupported',type=float,default=.45)
     p.add_argument('--fit-order',type=int,default=12);p.add_argument('--residual-gate',type=float,default=.3)
     p.add_argument('--control-stations',type=int,default=7)
+    p.add_argument('--shape',choices=['prior','cylinder','box'],default='prior')
+    p.add_argument('--support-tol-fraction',type=float,default=.035)
     args=p.parse_args()
     out=args.run/'regularization'
     if out.exists() and any(out.iterdir()):raise FileExistsError('Use a new run; refinement output already exists')
     if args.prior=='observed_only':report=observed_refinement(args.run,'Capture profile requests observed geometry only')
     else:
-        try:report=regularize(args.run,args.rings,args.angles,args.warp_axial,args.real_length,args.domain_coverage,args.domain_points,args.max_unsupported,args.fit_order,args.residual_gate,args.control_stations)
+        try:report=regularize(args.run,args.rings,args.angles,args.warp_axial,args.real_length,args.domain_coverage,args.domain_points,args.max_unsupported,args.fit_order,args.residual_gate,args.control_stations,args.shape,args.support_tol_fraction)
         except ValueError as error:
             if args.prior=='straight_tunnel':raise
             # All fit gates execute before regularized/capped surface files are written.

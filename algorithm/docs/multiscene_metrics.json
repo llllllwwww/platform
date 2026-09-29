@@ -34,11 +34,11 @@
         "dense_readiness_heuristic": true,
         "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
       },
-      "surface_kind": "regularized_tunnel",
+      "surface_kind": "primitive_cylinder",
       "raw_triangles": 277686,
       "refined_triangles": 15232,
-      "supported_vertices": 6778,
-      "inferred_vertices": 902,
+      "supported_vertices": 4556,
+      "inferred_vertices": 3124,
       "raw_boundary_edges": 1896,
       "refined_boundary_edges": 128,
       "closed_boundary_edges": 0,
@@ -62,22 +62,21 @@
       },
       "refined_localization": {
         "detections": 760,
-        "hit_count": 30199,
+        "hit_count": 33579,
         "requested_count": 70502,
         "usable_count": 70502,
         "observations_by_status": {
           "no_original_surface_evidence": 6652,
-          "outside_fitted_segment": 13063,
-          "no_surface_hit": 390,
-          "hit": 30199,
-          "excessive_relocation": 20198
+          "no_surface_hit": 13886,
+          "hit": 33579,
+          "excessive_relocation": 16385
         },
-        "candidates_with_mapped_points": 379,
-        "supported_hit_count": 29675,
-        "inferred_hit_count": 524,
-        "max_allowed_displacement_sfm_unit": 0.13435963560957298,
-        "accepted_displacement_median": 0.0772051811218263,
-        "accepted_displacement_p95": 0.126972651481628
+        "candidates_with_mapped_points": 396,
+        "supported_hit_count": 30862,
+        "inferred_hit_count": 2717,
+        "max_allowed_displacement_sfm_unit": 0.2870758588368143,
+        "accepted_displacement_median": 0.16056489944458027,
+        "accepted_displacement_p95": 0.2742317676544191
       },
       "multiview": {
         "candidate_observations": 760,
@@ -235,11 +234,11 @@
         "dense_readiness_heuristic": true,
         "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
       },
-      "surface_kind": "regularized_tunnel",
+      "surface_kind": "primitive_cylinder",
       "raw_triangles": 132656,
       "refined_triangles": 15232,
-      "supported_vertices": 3962,
-      "inferred_vertices": 3718,
+      "supported_vertices": 4901,
+      "inferred_vertices": 2779,
       "raw_boundary_edges": 6268,
       "refined_boundary_edges": 128,
       "closed_boundary_edges": 0,
@@ -263,22 +262,21 @@
       },
       "refined_localization": {
         "detections": 1759,
-        "hit_count": 3929,
+        "hit_count": 13058,
         "requested_count": 166594,
         "usable_count": 164934,
         "observations_by_status": {
           "no_original_surface_evidence": 50852,
-          "outside_fitted_segment": 94137,
-          "no_surface_hit": 1356,
-          "excessive_relocation": 16320,
-          "hit": 3929
+          "no_surface_hit": 95248,
+          "excessive_relocation": 7436,
+          "hit": 13058
         },
-        "candidates_with_mapped_points": 77,
-        "supported_hit_count": 1688,
-        "inferred_hit_count": 2241,
-        "max_allowed_displacement_sfm_unit": 0.21556721208797588,
-        "accepted_displacement_median": 0.13591480255126948,
-        "accepted_displacement_p95": 0.2082885503768919
+        "candidates_with_mapped_points": 177,
+        "supported_hit_count": 11427,
+        "inferred_hit_count": 1631,
+        "max_allowed_displacement_sfm_unit": 0.7062411823926086,
+        "accepted_displacement_median": 0.4156400561332701,
+        "accepted_displacement_p95": 0.6555874466896057
       },
       "multiview": {
         "candidate_observations": 1759,
@@ -436,11 +434,11 @@
         "dense_readiness_heuristic": true,
         "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
       },
-      "surface_kind": "regularized_tunnel",
+      "surface_kind": "primitive_cylinder",
       "raw_triangles": 161446,
       "refined_triangles": 15232,
-      "supported_vertices": 5087,
-      "inferred_vertices": 2593,
+      "supported_vertices": 6369,
+      "inferred_vertices": 1311,
       "raw_boundary_edges": 7226,
       "refined_boundary_edges": 128,
       "closed_boundary_edges": 0,
@@ -464,22 +462,21 @@
       },
       "refined_localization": {
         "detections": 2484,
-        "hit_count": 48798,
+        "hit_count": 53126,
         "requested_count": 235369,
         "usable_count": 232624,
         "observations_by_status": {
           "no_original_surface_evidence": 64443,
-          "outside_fitted_segment": 108835,
-          "hit": 48798,
-          "excessive_relocation": 12763,
-          "no_surface_hit": 530
+          "no_surface_hit": 107761,
+          "excessive_relocation": 10039,
+          "hit": 53126
         },
-        "candidates_with_mapped_points": 742,
-        "supported_hit_count": 43508,
-        "inferred_hit_count": 5290,
-        "max_allowed_displacement_sfm_unit": 0.22409269492854939,
-        "accepted_displacement_median": 0.08800041675567621,
-        "accepted_displacement_p95": 0.20012536048889146
+        "candidates_with_mapped_points": 770,
+        "supported_hit_count": 50599,
+        "inferred_hit_count": 2527,
+        "max_allowed_displacement_sfm_unit": 0.7144011460366871,
+        "accepted_displacement_median": 0.2928411364555358,
+        "accepted_displacement_p95": 0.6730713844299316
       },
       "multiview": {
         "candidate_observations": 2484,
@@ -641,11 +638,11 @@
         "dense_readiness_heuristic": true,
         "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
       },
-      "surface_kind": "regularized_tunnel",
+      "surface_kind": "primitive_box",
       "raw_triangles": 350817,
       "refined_triangles": 15232,
-      "supported_vertices": 7336,
-      "inferred_vertices": 344,
+      "supported_vertices": 4824,
+      "inferred_vertices": 2856,
       "raw_boundary_edges": 13879,
       "refined_boundary_edges": 128,
       "closed_boundary_edges": 0,
@@ -669,22 +666,21 @@
       },
       "refined_localization": {
         "detections": 2259,
-        "hit_count": 83724,
+        "hit_count": 63328,
         "requested_count": 210146,
         "usable_count": 210146,
         "observations_by_status": {
           "no_original_surface_evidence": 32971,
-          "hit": 83724,
-          "excessive_relocation": 35323,
-          "no_surface_hit": 3041,
-          "outside_fitted_segment": 55087
+          "excessive_relocation": 57781,
+          "hit": 63328,
+          "no_surface_hit": 56066
         },
-        "candidates_with_mapped_points": 1240,
-        "supported_hit_count": 82985,
-        "inferred_hit_count": 739,
-        "max_allowed_displacement_sfm_unit": 0.3416345425764441,
-        "accepted_displacement_median": 0.22144814953207967,
-        "accepted_displacement_p95": 0.32540690712630754
+        "candidates_with_mapped_points": 1053,
+        "supported_hit_count": 37498,
+        "inferred_hit_count": 25830,
+        "max_allowed_displacement_sfm_unit": 0.2314286729936175,
+        "accepted_displacement_median": 0.14884629845619202,
+        "accepted_displacement_p95": 0.22349880933761593
       },
       "multiview": {
         "candidate_observations": 2259,

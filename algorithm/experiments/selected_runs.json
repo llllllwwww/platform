@@ -7,7 +7,10 @@
     "prior": "auto",
     "author": "Sikander Iqbal",
     "license": "CC BY-SA 4.0",
-    "browser_video": true
+    "browser_video": true,
+    "shape": "cylinder",
+    "support_tol_fraction": 0.15,
+    "max_unsupported": 0.5
   },
   {
     "id": "rail_train",
@@ -18,7 +21,9 @@
     "author": "leven87 仓库提供；原视频作者未核实",
     "license": "媒体单独许可未核实",
     "browser_video": true,
-    "max_unsupported": 0.65
+    "max_unsupported": 0.5,
+    "shape": "cylinder",
+    "support_tol_fraction": 0.15
   },
   {
     "id": "rail_test",
@@ -28,7 +33,10 @@
     "prior": "auto",
     "author": "leven87 仓库提供；原视频作者未核实",
     "license": "媒体单独许可未核实",
-    "browser_video": true
+    "browser_video": true,
+    "shape": "cylinder",
+    "support_tol_fraction": 0.15,
+    "max_unsupported": 0.5
   },
   {
     "id": "tumvi_fisheye",
@@ -42,12 +50,14 @@
     "prior": "auto",
     "domain_coverage": 0.35,
     "domain_points": 60,
-    "max_unsupported": 0.65,
+    "max_unsupported": 0.5,
     "fit_order": 20,
     "control_stations": 16,
     "residual_gate": 0.5,
     "author": "TUM VI 数据集 / Schubert 等",
     "license": "CC BY 4.0",
-    "browser_video": false
+    "browser_video": false,
+    "shape": "box",
+    "support_tol_fraction": 0.25
   }
 ]

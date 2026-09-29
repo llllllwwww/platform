@@ -10,26 +10,25 @@
   "entry": "F:\\data\\中国研究生智慧城市技术与创意设计大赛\\.publish\\platform\\algorithm\\web\\multiscene\\tumvi_fisheye\\index.html",
   "frame_evidence_count": 179,
   "regularized": {
-    "surface_id": "416ac8101b1ec05f29b2",
+    "surface_id": "ae27e88f8d1fdabff729",
     "triangles": 15232,
     "mapping": {
       "detections": 2259,
-      "hit_count": 83724,
+      "hit_count": 63328,
       "requested_count": 210146,
       "usable_count": 210146,
       "observations_by_status": {
         "no_original_surface_evidence": 32971,
-        "hit": 83724,
-        "excessive_relocation": 35323,
-        "no_surface_hit": 3041,
-        "outside_fitted_segment": 55087
+        "excessive_relocation": 57781,
+        "hit": 63328,
+        "no_surface_hit": 56066
       },
-      "candidates_with_mapped_points": 1240,
-      "supported_hit_count": 82985,
-      "inferred_hit_count": 739,
-      "max_allowed_displacement_sfm_unit": 0.3416345425764441,
-      "accepted_displacement_median": 0.22144814953207967,
-      "accepted_displacement_p95": 0.32540690712630754
+      "candidates_with_mapped_points": 1053,
+      "supported_hit_count": 37498,
+      "inferred_hit_count": 25830,
+      "max_allowed_displacement_sfm_unit": 0.2314286729936175,
+      "accepted_displacement_median": 0.14884629845619202,
+      "accepted_displacement_p95": 0.22349880933761593
     }
   }
 }

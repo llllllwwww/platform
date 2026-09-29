@@ -46,8 +46,13 @@ def main():
                 if case.get('fit_order'):refine_args+=['--fit-order',case['fit_order']]
                 if case.get('control_stations'):refine_args+=['--control-stations',case['control_stations']]
                 if case.get('residual_gate'):refine_args+=['--residual-gate',case['residual_gate']]
+                if case.get('shape'):refine_args+=['--shape',case['shape']]
+                if case.get('support_tol_fraction'):refine_args+=['--support-tol-fraction',case['support_tol_fraction']]
                 execute('refinement',python('refine_surface.py',refine_args))
-            if not (run/'regularization/textured/mesh.ply').exists():
+            shape=case.get('shape','prior')
+            if shape in ('cylinder','box'):
+                if not (run/'regularization/textured/mesh.ply').exists():execute('flat_texture',python('make_flat_textured.py',['--run',run]))
+            elif not (run/'regularization/textured/mesh.ply').exists():
                 execute('refined_texture',[colmap,'mesh_texturer','--input_path',case['run']+'/regularization/surface_regularized.ply',
                     '--output_path',case['run']+'/regularization/textured','--workspace_path',case['run']+'/dense'])
         if args.stage in ('inspection','all'):
