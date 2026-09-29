@@ -80,16 +80,19 @@ def fit_surface(points,domain,order=12,n_controls=7,angular_cells=120,station_ce
     angular=np.kron(np.eye(ns),np.diag(.025*frequencies**2))
     penalty=axial.T@axial+angular.T@angular+np.eye(A.shape[1])*1e-8
     rng=np.random.default_rng(42);heldout=rng.random(len(rows))<.2
+    # Log-radial field: exp() of the fit is positive by construction, which keeps long
+    # partially-observed domains from dipping into invalid negative radii, and matches
+    # the multiplicative nature of MVS radial noise.
     def irls(which):
-        x=A[which];y=rows[which,2];base=np.sqrt(np.minimum(rows[which,3],20)/20)
+        x=A[which];y=np.log(rows[which,2]);base=np.sqrt(np.minimum(rows[which,3],20)/20)
         weights=base.copy();coef=np.zeros(x.shape[1])
         for _ in range(10):
             coef=solve(x.T@(weights[:,None]*x)+penalty,x.T@(weights*y),assume_a='pos')
-            residual=x@coef-y;scale=max(float(np.median(abs(residual-np.median(residual)))*1.4826),.002*np.median(y))
+            residual=x@coef-y;scale=max(float(np.median(abs(residual-np.median(residual)))*1.4826),.002)
             weights=base*np.minimum(1.,1.5*scale/np.maximum(abs(residual),1e-12))
         return coef,scale
     train,train_scale=irls(~heldout)
-    hold_error=A[heldout]@train-rows[heldout,2]
+    hold_error=np.exp(A[heldout]@train)-rows[heldout,2]
     coef,scale=irls(np.ones(len(rows),dtype=bool))
     report={'cell_count':len(rows),'heldout_cells':int(heldout.sum()),'internal_holdout_median_absolute_radial_error':float(np.median(abs(hold_error))),
       'internal_holdout_p95_absolute_radial_error':float(np.quantile(abs(hold_error),.95)),
@@ -97,7 +100,7 @@ def fit_surface(points,domain,order=12,n_controls=7,angular_cells=120,station_ce
       'holdout_scope':'Random measured angular/station cells, internal consistency only; not external survey accuracy.'}
     return knots,coef,rows,report
 
-def choose_domain(points):
+def choose_domain(points,min_coverage=.7,min_points=150):
     low,high=np.quantile(points[:,2],[.0005,.995]);edges=np.linspace(low,high,121)
     rows=[]
     for i,(lo,hi) in enumerate(zip(edges[:-1],edges[1:])):
@@ -107,7 +110,7 @@ def choose_domain(points):
         cnt=np.bincount(angle,minlength=72)
         rows.append([len(q),np.mean(cnt>=2),np.median(r) if len(r) else 0])
     rows=np.asarray(rows)
-    good=(rows[:,1]>=.7)&(rows[:,0]>=150)
+    good=(rows[:,1]>=min_coverage)&(rows[:,0]>=min_points)
     labels,count=label(good)
     if count==0:raise ValueError('No contiguous tunnel-like section; refuse a generic tube fallback')
     selected=max(range(1,count+1),key=lambda k:np.sum(labels==k))
@@ -118,20 +121,49 @@ def choose_domain(points):
         if first==0 or rows[first-1,1]<.18 or rows[first-1,0]<40:break
         first-=1
     if last+1<len(rows) and rows[last+1,1]>.5:last+=1
-    return (float(edges[first]),float(edges[last+1])),{'section_bin_width':float(edges[1]-edges[0]),'coverage_threshold':.7,'range_bins':[int(first),int(last)],'coverage':[r[1] for r in rows]}
+    return (float(edges[first]),float(edges[last+1])),{'section_bin_width':float(edges[1]-edges[0]),'coverage_threshold':float(min_coverage),'min_points':int(min_points),'range_bins':[int(first),int(last)],'coverage':[r[1] for r in rows]}
 
-def regularize(run,rings=180,angles=192):
+def regularize(run,rings=180,angles=192,warp_axial=False,real_length=0.0,domain_coverage=.7,domain_points=150,max_unsupported=.45,fit_order=12,residual_gate=.3,control_stations=7):
     args=argparse.Namespace(rings=rings,angles=angles)
     if rings<4 or angles<12:raise ValueError('Insufficient structured-mesh resolution')
     run=Path(run);out=run/'regularization';out.mkdir(exist_ok=True)
     scene=json.loads((run/'scene.json').read_text('utf-8'))
     with np.load(run/'surface.npz') as m:vertices=m['vertices'].copy();faces=m['faces'].copy()
     origin,basis,curvature=coordinate_frame(scene['cameras']);points=(vertices-origin)@basis.T
-    domain,domain_info=choose_domain(points)
+    # Domain selection runs on the UNWARPED stations: observation coverage is a fact
+    # about where the cameras actually looked, and the density/coverage gates must not
+    # be distorted by the reparameterization itself. The selected interval is then
+    # mapped through the warp curve so fitting happens in mileage-correct coordinates.
+    domain,domain_info=choose_domain(points,domain_coverage,domain_points)
+    warp_info=None
+    if warp_axial:
+        # Monocular COLMAP trajectories carry systematic axial drift (measured 1.4-2.7x
+        # first-half vs second-half step ratio on multiscene runs). Re-parameterize the
+        # observed stations to constant spacing (constant push-through speed assumption)
+        # BEFORE fitting, so the structured rings interpolate equal real-world mileage
+        # and the model length stops looking compressed. This trades exact pixel-ray
+        # consistency for a stated display assumption; the curve is fully reported.
+        from axial_reparam import station_targets, remap_axis, half_gap_report
+        centers=np.array([c['center'] for c in scene['cameras']])
+        s_cam=(centers-origin)@basis[2]
+        order_idx=np.argsort(s_cam);s_sorted=s_cam[order_idx]
+        u_sorted=station_targets(s_sorted,real_length)
+        points,disp=remap_axis(points,origin,basis[2],s_sorted,u_sorted)
+        domain=(float(np.interp(domain[0],s_sorted,u_sorted)),float(np.interp(domain[1],s_sorted,u_sorted)))
+        warp_info={'applied':True,'assumption':'constant push-through speed; camera station spacing flattened to uniform',
+            'real_length_requested':real_length,'station_range_before_warp':[float(s_sorted[0]),float(s_sorted[-1])],
+            'max_observed_point_displacement':float(disp.max()),'median_observed_point_displacement':float(np.median(disp)),
+            **half_gap_report(s_sorted,u_sorted)}
     crop=(points[:,2]>=domain[0])&(points[:,2]<=domain[1]);observed=points[crop]
-    knots,coef,cells,fit=fit_surface(observed,domain)
+    # Near-axis MVS debris (floating fragments around the camera path, measured down to
+    # r=0.05 vs a wall at r~0.8) drags the radial field inward and inflates holdout
+    # error. Gate on a robust radius band before fitting; report what was removed.
+    _r=np.linalg.norm(observed[:,:2],axis=1);_rmed=float(np.median(_r))
+    _band=( _r>0.35*_rmed)&(_r<2.5*_rmed)
+    near_axis_removed=int((~_band).sum());observed=observed[_band]
+    knots,coef,cells,fit=fit_surface(observed,domain,order=fit_order,n_controls=control_stations)
     st=np.linspace(*domain,args.rings);th=np.linspace(-np.pi,np.pi,args.angles,endpoint=False)
-    ss,tt=np.meshgrid(st,th,indexing='ij');radius=(design(ss.ravel(),tt.ravel(),knots,fit['order'])@coef).reshape(ss.shape)
+    ss,tt=np.meshgrid(st,th,indexing='ij');radius=np.exp(design(ss.ravel(),tt.ravel(),knots,fit['order'])@coef).reshape(ss.shape)
     if not np.isfinite(radius).all() or radius.min()<=0:raise ValueError('Fitted radial function is not a positive valid cross section')
     local=np.stack([radius*np.cos(tt),radius*np.sin(tt),ss],axis=-1).reshape(-1,3)
     regular=local@basis+origin
@@ -145,9 +177,9 @@ def regularize(run,rings=180,angles=192):
     near=cKDTree(observed).query(local)[0]
     tol=max(.035*float(np.median(radius)),3*fit['robust_cell_residual_scale'])
     supported=near<=tol
-    if float((~supported).mean())>.45:raise ValueError('More than 45% of fitted vertices lack local observation support')
-    if fit['internal_holdout_p95_absolute_radial_error']>.3*float(np.median(radius)):
-        raise ValueError('Cross-section residual is too large for the structural prior')
+    if float((~supported).mean())>max_unsupported:raise ValueError(f'More than {max_unsupported:.0%} of fitted vertices lack local observation support')
+    if fit['internal_holdout_p95_absolute_radial_error']>residual_gate*float(np.median(radius)):
+        raise ValueError(f'Cross-section residual {fit["internal_holdout_p95_absolute_radial_error"]:.4f} exceeds {residual_gate:.2f}x median radius {float(np.median(radius)):.4f}; raise --fit-order or relax --residual-gate deliberately')
     geometry_id=hashlib.sha256(np.asarray(regular,dtype='<f4').tobytes()+f.tobytes()).hexdigest()[:20]
     np.savez_compressed(out/'surface_regularized.npz',vertices=regular.astype(np.float32),faces=f,
         scene_id=scene['scene_id'],surface_id=geometry_id,support=supported.astype(np.uint8),distance_to_observation=near.astype(np.float32))
@@ -175,8 +207,10 @@ def regularize(run,rings=180,angles=192):
     assert closed_top['boundary_edges']==0 and closed_top['euler_characteristic']==2 and closed_top['degenerate_faces']==0
     report={'scene_id':scene['scene_id'],'surface_id':geometry_id,'surface_kind':'regularized_tunnel','closed_surface_id':closed_id,'method':'robust cubic B-spline along axis / periodic Fourier cross section, followed by structured remeshing',
       'coordinate_origin':origin.tolist(),'coordinate_basis_rows':basis.tolist(),'axis_bending_ratio':curvature,'station_range':domain,
-      'observed_vertices_used':len(observed),'observed_vertices_excluded_outside_range':int((~crop).sum()),'domain_selection':domain_info,
-      'fit':fit,'knots':knots.tolist(),'coefficients':coef.tolist(),'raw_topology':raw_top,'regularized_topology':reg_top,'closed_topology':closed_top,
+      'axial_velocity_warp':warp_info or {'applied':False},
+      'domain_gates':{'min_coverage':float(domain_coverage),'min_points':int(domain_points),'max_unsupported_fraction':float(max_unsupported)},
+      'observed_vertices_used':len(observed),'observed_vertices_excluded_outside_range':int((~crop).sum()),'near_axis_points_removed':near_axis_removed,'robust_radius_band':[0.35,2.5],'domain_selection':domain_info,
+      'fit':fit,'control_stations':control_stations,'knots':knots.tolist(),'coefficients':coef.tolist(),'raw_topology':raw_top,'regularized_topology':reg_top,'closed_topology':closed_top,
       'local_support_threshold_sfm_unit':tol,'supported_vertices':int(supported.sum()),'inferred_vertices':int((~supported).sum()),
       'radial_range': [float(radius.min()),float(radius.max())],
       'limits':['Shape prior for a short nearly straight star-shaped tunnel; not a deformation measurement.',
@@ -192,6 +226,14 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--run',default=str(ROOT/'results/dvp_tunnel'))
     p.add_argument('--rings',type=int,default=180);p.add_argument('--angles',type=int,default=192)
-    args=p.parse_args();regularize(args.run,args.rings,args.angles)
+    p.add_argument('--warp-axial',action='store_true',help='flatten camera station spacing before fitting (constant-velocity push-through assumption)')
+    p.add_argument('--real-length',type=float,default=0.0,help='force axial span to this length in SfM units; 0 = keep current span')
+    p.add_argument('--domain-coverage',type=float,default=.7,help='angle-coverage gate for domain selection; lower it to fit longer partially-observed reaches')
+    p.add_argument('--domain-points',type=int,default=150)
+    p.add_argument('--max-unsupported',type=float,default=.45,help='refuse if more than this fraction of fitted vertices lack observation support')
+    p.add_argument('--fit-order',type=int,default=12,help='Fourier order of the cross-section; raise for rectangular/doorway profiles')
+    p.add_argument('--residual-gate',type=float,default=.3,help='holdout p95 radial error limit as a fraction of median radius')
+    p.add_argument('--control-stations',type=int,default=7,help='B-spline control stations along the axis; raise for doorways/structures')
+    args=p.parse_args();regularize(args.run,args.rings,args.angles,args.warp_axial,args.real_length,args.domain_coverage,args.domain_points,args.max_unsupported,args.fit_order,args.residual_gate,args.control_stations)
 
 if __name__=='__main__':main()

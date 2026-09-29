@@ -38,7 +38,15 @@ def main():
             if not (run/'dense/filtered/postprocess_report.json').exists():execute('mesh_postprocess',python('mesh_postprocess.py',['--run',run,'--colmap',colmap]))
             if not (run/'surface.npz').exists():export_npz(run/'dense/mesh_oriented.ply',run/'surface.npz',scene['scene_id'])
             if not (run/'dense/textured/mesh.ply').exists():execute('raw_texture',[colmap,'mesh_texturer','--input_path',case['run']+'/dense/mesh_oriented.ply','--output_path',case['run']+'/dense/textured','--workspace_path',case['run']+'/dense'])
-            if not (run/'regularization/report.json').exists():execute('refinement',python('refine_surface.py',['--run',run,'--prior',case['prior']]))
+            if not (run/'regularization/report.json').exists():
+                refine_args=['--run',run,'--prior',case['prior'],'--rings',case.get('rings',120),'--angles',case.get('angles',64),'--warp-axial']
+                if case.get('real_length'):refine_args+=['--real-length',case['real_length']]
+                if case.get('domain_coverage'):refine_args+=['--domain-coverage',case['domain_coverage'],'--domain-points',case.get('domain_points',60)]
+                if case.get('max_unsupported'):refine_args+=['--max-unsupported',case['max_unsupported']]
+                if case.get('fit_order'):refine_args+=['--fit-order',case['fit_order']]
+                if case.get('control_stations'):refine_args+=['--control-stations',case['control_stations']]
+                if case.get('residual_gate'):refine_args+=['--residual-gate',case['residual_gate']]
+                execute('refinement',python('refine_surface.py',refine_args))
             if not (run/'regularization/textured/mesh.ply').exists():
                 execute('refined_texture',[colmap,'mesh_texturer','--input_path',case['run']+'/regularization/surface_regularized.ply',
                     '--output_path',case['run']+'/regularization/textured','--workspace_path',case['run']+'/dense'])

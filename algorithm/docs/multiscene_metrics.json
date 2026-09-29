@@ -36,11 +36,11 @@
       },
       "surface_kind": "regularized_tunnel",
       "raw_triangles": 277686,
-      "refined_triangles": 68736,
-      "supported_vertices": 26539,
-      "inferred_vertices": 8021,
+      "refined_triangles": 15232,
+      "supported_vertices": 6778,
+      "inferred_vertices": 902,
       "raw_boundary_edges": 1896,
-      "refined_boundary_edges": 384,
+      "refined_boundary_edges": 128,
       "closed_boundary_edges": 0,
       "prior_rejection": null,
       "mesh_postprocess": {
@@ -62,22 +62,22 @@
       },
       "refined_localization": {
         "detections": 760,
-        "hit_count": 49359,
+        "hit_count": 30199,
         "requested_count": 70502,
         "usable_count": 70502,
         "observations_by_status": {
           "no_original_surface_evidence": 6652,
-          "outside_fitted_segment": 11141,
-          "hit": 49359,
-          "excessive_relocation": 3337,
-          "no_surface_hit": 13
+          "outside_fitted_segment": 13063,
+          "no_surface_hit": 390,
+          "hit": 30199,
+          "excessive_relocation": 20198
         },
-        "candidates_with_mapped_points": 558,
-        "supported_hit_count": 48623,
-        "inferred_hit_count": 736,
-        "max_allowed_displacement_sfm_unit": 0.06538798071681702,
-        "accepted_displacement_median": 0.008315205574035546,
-        "accepted_displacement_p95": 0.0406850814819335
+        "candidates_with_mapped_points": 379,
+        "supported_hit_count": 29675,
+        "inferred_hit_count": 524,
+        "max_allowed_displacement_sfm_unit": 0.13435963560957298,
+        "accepted_displacement_median": 0.0772051811218263,
+        "accepted_displacement_p95": 0.126972651481628
       },
       "multiview": {
         "candidate_observations": 760,
@@ -101,7 +101,7 @@
           "triangles": 68736,
           "currentCandidates": 30,
           "selected": null,
-          "markerCount": 2635,
+          "markerCount": 2702,
           "glError": 0
         },
         "setup": {
@@ -120,7 +120,7 @@
             "triangles": 68736,
             "currentCandidates": 30,
             "selected": "frame_00000282-d0",
-            "markerCount": 2635,
+            "markerCount": 2702,
             "glError": 0
           },
           {
@@ -128,10 +128,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 345325,
+            "triangles": 277686,
             "currentCandidates": 30,
             "selected": "frame_00000282-d0",
-            "markerCount": 2769,
+            "markerCount": 2835,
             "glError": 0
           }
         ],
@@ -143,7 +143,7 @@
           "triangles": 68736,
           "currentCandidates": 30,
           "selected": "frame_00000282-d0",
-          "markerCount": 2635,
+          "markerCount": 2702,
           "glError": 0
         },
         "last": {
@@ -151,7 +151,7 @@
           "surface": "raw",
           "lens": "SIMPLE_RADIAL",
           "projection": "virtual_perspective",
-          "triangles": 345325,
+          "triangles": 277686,
           "currentCandidates": 0,
           "selected": null,
           "markerCount": 0,
@@ -160,7 +160,7 @@
         "projection": {
           "model": "SIMPLE_RADIAL",
           "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
-          "max_pixel_error": 7.362765473613048e-11,
+          "max_pixel_error": 7.358254873828805e-11,
           "samples": 5
         },
         "repeated": {
@@ -173,10 +173,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 345325,
+            "triangles": 277686,
             "currentCandidates": 14,
             "selected": "frame_00000000-d10",
-            "markerCount": 555,
+            "markerCount": 557,
             "glError": 0
           },
           "after": {
@@ -184,10 +184,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 345325,
+            "triangles": 277686,
             "currentCandidates": 44,
             "selected": "frame_00000016-d23",
-            "markerCount": 1165,
+            "markerCount": 1212,
             "glError": 0
           }
         },
@@ -237,11 +237,11 @@
       },
       "surface_kind": "regularized_tunnel",
       "raw_triangles": 132656,
-      "refined_triangles": 68736,
-      "supported_vertices": 24420,
-      "inferred_vertices": 10140,
+      "refined_triangles": 15232,
+      "supported_vertices": 3962,
+      "inferred_vertices": 3718,
       "raw_boundary_edges": 6268,
-      "refined_boundary_edges": 384,
+      "refined_boundary_edges": 128,
       "closed_boundary_edges": 0,
       "prior_rejection": null,
       "mesh_postprocess": {
@@ -263,22 +263,22 @@
       },
       "refined_localization": {
         "detections": 1759,
-        "hit_count": 22162,
+        "hit_count": 3929,
         "requested_count": 166594,
         "usable_count": 164934,
         "observations_by_status": {
           "no_original_surface_evidence": 50852,
-          "outside_fitted_segment": 92186,
-          "no_surface_hit": 620,
-          "excessive_relocation": 774,
-          "hit": 22162
+          "outside_fitted_segment": 94137,
+          "no_surface_hit": 1356,
+          "excessive_relocation": 16320,
+          "hit": 3929
         },
-        "candidates_with_mapped_points": 336,
-        "supported_hit_count": 20402,
-        "inferred_hit_count": 1760,
-        "max_allowed_displacement_sfm_unit": 0.4225192098481205,
-        "accepted_displacement_median": 0.06491088867187506,
-        "accepted_displacement_p95": 0.3318022608757019
+        "candidates_with_mapped_points": 77,
+        "supported_hit_count": 1688,
+        "inferred_hit_count": 2241,
+        "max_allowed_displacement_sfm_unit": 0.21556721208797588,
+        "accepted_displacement_median": 0.13591480255126948,
+        "accepted_displacement_p95": 0.2082885503768919
       },
       "multiview": {
         "candidate_observations": 1759,
@@ -299,17 +299,17 @@
           "surface": "regularized",
           "lens": "SIMPLE_RADIAL",
           "projection": "virtual_perspective",
-          "triangles": 134918,
+          "triangles": 68736,
           "currentCandidates": 30,
           "selected": null,
-          "markerCount": 1871,
+          "markerCount": 440,
           "glError": 0
         },
         "setup": {
           "frame": 28,
-          "id": "frame_00000420-d0",
+          "id": "frame_00000420-d5",
           "count": 56,
-          "surfaceKind": "observed_smoothed",
+          "surfaceKind": "regularized_tunnel",
           "hasRefinement": true
         },
         "comparisons": [
@@ -318,10 +318,10 @@
             "surface": "regularized",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 134918,
+            "triangles": 68736,
             "currentCandidates": 30,
-            "selected": "frame_00000420-d0",
-            "markerCount": 1871,
+            "selected": "frame_00000420-d5",
+            "markerCount": 440,
             "glError": 0
           },
           {
@@ -329,10 +329,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 134990,
+            "triangles": 132656,
             "currentCandidates": 30,
-            "selected": "frame_00000420-d0",
-            "markerCount": 1966,
+            "selected": "frame_00000420-d5",
+            "markerCount": 2176,
             "glError": 0
           }
         ],
@@ -341,10 +341,10 @@
           "surface": "regularized",
           "lens": "SIMPLE_RADIAL",
           "projection": "virtual_perspective",
-          "triangles": 134918,
+          "triangles": 68736,
           "currentCandidates": 30,
-          "selected": "frame_00000420-d0",
-          "markerCount": 1871,
+          "selected": "frame_00000420-d5",
+          "markerCount": 440,
           "glError": 0
         },
         "last": {
@@ -352,16 +352,16 @@
           "surface": "raw",
           "lens": "SIMPLE_RADIAL",
           "projection": "virtual_perspective",
-          "triangles": 134990,
+          "triangles": 132656,
           "currentCandidates": 30,
           "selected": null,
-          "markerCount": 2084,
+          "markerCount": 2069,
           "glError": 0
         },
         "projection": {
           "model": "SIMPLE_RADIAL",
           "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
-          "max_pixel_error": 6.75416136487783e-11,
+          "max_pixel_error": 6.751363953874972e-11,
           "samples": 9
         },
         "repeated": {
@@ -374,10 +374,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 134990,
+            "triangles": 132656,
             "currentCandidates": 25,
             "selected": "frame_00000000-d0",
-            "markerCount": 223,
+            "markerCount": 161,
             "glError": 0
           },
           "after": {
@@ -385,10 +385,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 134990,
+            "triangles": 132656,
             "currentCandidates": 30,
             "selected": "frame_00000022-d1",
-            "markerCount": 715,
+            "markerCount": 660,
             "glError": 0
           }
         },
@@ -438,11 +438,11 @@
       },
       "surface_kind": "regularized_tunnel",
       "raw_triangles": 161446,
-      "refined_triangles": 68736,
-      "supported_vertices": 30744,
-      "inferred_vertices": 3816,
+      "refined_triangles": 15232,
+      "supported_vertices": 5087,
+      "inferred_vertices": 2593,
       "raw_boundary_edges": 7226,
-      "refined_boundary_edges": 384,
+      "refined_boundary_edges": 128,
       "closed_boundary_edges": 0,
       "prior_rejection": null,
       "mesh_postprocess": {
@@ -464,22 +464,22 @@
       },
       "refined_localization": {
         "detections": 2484,
-        "hit_count": 58730,
+        "hit_count": 48798,
         "requested_count": 235369,
         "usable_count": 232624,
         "observations_by_status": {
           "no_original_surface_evidence": 64443,
-          "outside_fitted_segment": 108673,
-          "hit": 58730,
-          "excessive_relocation": 2962,
-          "no_surface_hit": 561
+          "outside_fitted_segment": 108835,
+          "hit": 48798,
+          "excessive_relocation": 12763,
+          "no_surface_hit": 530
         },
-        "candidates_with_mapped_points": 809,
-        "supported_hit_count": 58035,
-        "inferred_hit_count": 695,
-        "max_allowed_displacement_sfm_unit": 0.47903868633175195,
-        "accepted_displacement_median": 0.0692911148071288,
-        "accepted_displacement_p95": 0.30010919570922834
+        "candidates_with_mapped_points": 742,
+        "supported_hit_count": 43508,
+        "inferred_hit_count": 5290,
+        "max_allowed_displacement_sfm_unit": 0.22409269492854939,
+        "accepted_displacement_median": 0.08800041675567621,
+        "accepted_displacement_p95": 0.20012536048889146
       },
       "multiview": {
         "candidate_observations": 2484,
@@ -503,7 +503,7 @@
           "triangles": 68736,
           "currentCandidates": 25,
           "selected": null,
-          "markerCount": 1693,
+          "markerCount": 1680,
           "glError": 0
         },
         "setup": {
@@ -522,7 +522,7 @@
             "triangles": 68736,
             "currentCandidates": 25,
             "selected": "frame_00000199-d0",
-            "markerCount": 1693,
+            "markerCount": 1680,
             "glError": 0
           },
           {
@@ -530,10 +530,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 163903,
+            "triangles": 161446,
             "currentCandidates": 25,
             "selected": "frame_00000199-d0",
-            "markerCount": 2027,
+            "markerCount": 2015,
             "glError": 0
           }
         ],
@@ -545,7 +545,7 @@
           "triangles": 68736,
           "currentCandidates": 25,
           "selected": "frame_00000199-d0",
-          "markerCount": 1693,
+          "markerCount": 1680,
           "glError": 0
         },
         "last": {
@@ -553,16 +553,16 @@
           "surface": "raw",
           "lens": "SIMPLE_RADIAL",
           "projection": "virtual_perspective",
-          "triangles": 163903,
+          "triangles": 161446,
           "currentCandidates": 35,
           "selected": null,
-          "markerCount": 2721,
+          "markerCount": 2523,
           "glError": 0
         },
         "projection": {
           "model": "SIMPLE_RADIAL",
           "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
-          "max_pixel_error": 2.6072230489931267e-10,
+          "max_pixel_error": 1.4210854715202004e-13,
           "samples": 20
         },
         "repeated": {
@@ -575,10 +575,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 163903,
+            "triangles": 161446,
             "currentCandidates": 28,
             "selected": "frame_00000004-d0",
-            "markerCount": 685,
+            "markerCount": 607,
             "glError": 0
           },
           "after": {
@@ -586,10 +586,10 @@
             "surface": "raw",
             "lens": "SIMPLE_RADIAL",
             "projection": "virtual_perspective",
-            "triangles": 163903,
+            "triangles": 161446,
             "currentCandidates": 29,
             "selected": "frame_00000006-d1",
-            "markerCount": 660,
+            "markerCount": 519,
             "glError": 0
           }
         },
@@ -598,7 +598,7 @@
           "rendered": "true",
           "glError": "0",
           "ready": "true",
-          "textureResized": "raw:16384x3669→8192x1834",
+          "textureResized": "raw:16384x3642→8192x1821",
           "texture": "loaded"
         }
       },
@@ -641,15 +641,15 @@
         "dense_readiness_heuristic": true,
         "limits": "Track support and internal parallax checks do not establish ground-truth pose or surface accuracy."
       },
-      "surface_kind": "observed_smoothed",
+      "surface_kind": "regularized_tunnel",
       "raw_triangles": 350817,
-      "refined_triangles": 350250,
-      "supported_vertices": 179406,
-      "inferred_vertices": 1117,
+      "refined_triangles": 15232,
+      "supported_vertices": 7336,
+      "inferred_vertices": 344,
       "raw_boundary_edges": 13879,
-      "refined_boundary_edges": 13784,
-      "closed_boundary_edges": null,
-      "prior_rejection": "Capture profile requests observed geometry only",
+      "refined_boundary_edges": 128,
+      "closed_boundary_edges": 0,
+      "prior_rejection": null,
       "mesh_postprocess": {
         "points_before": 204929,
         "points_kept": 180762,
@@ -669,21 +669,22 @@
       },
       "refined_localization": {
         "detections": 2259,
-        "hit_count": 149923,
+        "hit_count": 83724,
         "requested_count": 210146,
         "usable_count": 210146,
         "observations_by_status": {
           "no_original_surface_evidence": 32971,
-          "excessive_relocation": 26735,
-          "hit": 149923,
-          "no_surface_hit": 517
+          "hit": 83724,
+          "excessive_relocation": 35323,
+          "no_surface_hit": 3041,
+          "outside_fitted_segment": 55087
         },
-        "candidates_with_mapped_points": 2152,
-        "supported_hit_count": 149923,
-        "inferred_hit_count": 0,
-        "max_allowed_displacement_sfm_unit": 0.0039371570982761365,
-        "accepted_displacement_median": 0.0006077587604522278,
-        "accepted_displacement_p95": 0.003131151199340827
+        "candidates_with_mapped_points": 1240,
+        "supported_hit_count": 82985,
+        "inferred_hit_count": 739,
+        "max_allowed_displacement_sfm_unit": 0.3416345425764441,
+        "accepted_displacement_median": 0.22144814953207967,
+        "accepted_displacement_p95": 0.32540690712630754
       },
       "multiview": {
         "candidate_observations": 2259,
@@ -704,10 +705,10 @@
           "surface": "regularized",
           "lens": "OPENCV_FISHEYE",
           "projection": "virtual_perspective",
-          "triangles": 390035,
+          "triangles": 350250,
           "currentCandidates": 12,
           "selected": null,
-          "markerCount": 896,
+          "markerCount": 901,
           "glError": 0
         },
         "setup": {
@@ -723,10 +724,10 @@
             "surface": "regularized",
             "lens": "OPENCV_FISHEYE",
             "projection": "virtual_perspective",
-            "triangles": 390035,
+            "triangles": 350250,
             "currentCandidates": 12,
             "selected": "frame_00000297-d0",
-            "markerCount": 896,
+            "markerCount": 901,
             "glError": 0
           },
           {
@@ -734,10 +735,10 @@
             "surface": "raw",
             "lens": "OPENCV_FISHEYE",
             "projection": "virtual_perspective",
-            "triangles": 390413,
+            "triangles": 350817,
             "currentCandidates": 12,
             "selected": "frame_00000297-d0",
-            "markerCount": 975,
+            "markerCount": 998,
             "glError": 0
           }
         ],
@@ -746,10 +747,10 @@
           "surface": "regularized",
           "lens": "OPENCV_FISHEYE",
           "projection": "virtual_perspective",
-          "triangles": 390035,
+          "triangles": 350250,
           "currentCandidates": 12,
           "selected": "frame_00000297-d0",
-          "markerCount": 896,
+          "markerCount": 901,
           "glError": 0
         },
         "last": {
@@ -757,16 +758,16 @@
           "surface": "raw",
           "lens": "OPENCV_FISHEYE",
           "projection": "virtual_perspective",
-          "triangles": 390413,
+          "triangles": 350817,
           "currentCandidates": 10,
           "selected": null,
-          "markerCount": 765,
+          "markerCount": 725,
           "glError": 0
         },
         "projection": {
           "model": "OPENCV_FISHEYE",
           "scope": "Calibrated original-image projection; mesh viewport uses virtual perspective",
-          "max_pixel_error": 2.5421149729252077e-13,
+          "max_pixel_error": 2.411662016538279e-13,
           "samples": 20
         },
         "repeated": {
@@ -779,10 +780,10 @@
             "surface": "raw",
             "lens": "OPENCV_FISHEYE",
             "projection": "virtual_perspective",
-            "triangles": 390413,
+            "triangles": 350817,
             "currentCandidates": 15,
             "selected": "frame_00000003-d11",
-            "markerCount": 993,
+            "markerCount": 997,
             "glError": 0
           },
           "after": {
@@ -790,10 +791,10 @@
             "surface": "raw",
             "lens": "OPENCV_FISHEYE",
             "projection": "virtual_perspective",
-            "triangles": 390413,
+            "triangles": 350817,
             "currentCandidates": 12,
             "selected": "frame_00000006-d9",
-            "markerCount": 1103,
+            "markerCount": 1108,
             "glError": 0
           }
         },

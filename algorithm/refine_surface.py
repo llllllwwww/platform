@@ -83,12 +83,19 @@ def observed_refinement(run,reason):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--run',required=True,type=Path)
-    p.add_argument('--prior',choices=['auto','straight_tunnel','observed_only'],default='auto');args=p.parse_args()
+    p.add_argument('--prior',choices=['auto','straight_tunnel','observed_only'],default='auto')
+    p.add_argument('--rings',type=int,default=120);p.add_argument('--angles',type=int,default=64)
+    p.add_argument('--warp-axial',action='store_true');p.add_argument('--real-length',type=float,default=0.0)
+    p.add_argument('--domain-coverage',type=float,default=.7);p.add_argument('--domain-points',type=int,default=150)
+    p.add_argument('--max-unsupported',type=float,default=.45)
+    p.add_argument('--fit-order',type=int,default=12);p.add_argument('--residual-gate',type=float,default=.3)
+    p.add_argument('--control-stations',type=int,default=7)
+    args=p.parse_args()
     out=args.run/'regularization'
     if out.exists() and any(out.iterdir()):raise FileExistsError('Use a new run; refinement output already exists')
     if args.prior=='observed_only':report=observed_refinement(args.run,'Capture profile requests observed geometry only')
     else:
-        try:report=regularize(args.run)
+        try:report=regularize(args.run,args.rings,args.angles,args.warp_axial,args.real_length,args.domain_coverage,args.domain_points,args.max_unsupported,args.fit_order,args.residual_gate,args.control_stations)
         except ValueError as error:
             if args.prior=='straight_tunnel':raise
             # All fit gates execute before regularized/capped surface files are written.

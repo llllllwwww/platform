@@ -17,7 +17,8 @@
     "prior": "auto",
     "author": "leven87 仓库提供；原视频作者未核实",
     "license": "媒体单独许可未核实",
-    "browser_video": true
+    "browser_video": true,
+    "max_unsupported": 0.65
   },
   {
     "id": "rail_test",
@@ -32,10 +33,19 @@
   {
     "id": "tumvi_fisheye",
     "title": "TUM VI 走廊 · 已标定鱼眼相机",
-    "review_notes": ["低纹理墙面仍有明显缺口；当前结果是局部观测表面，不代表完整走廊模型。", "门框等结构边缘可触发重复候选，多帧证据不等于确认裂缝。"],
+    "review_notes": [
+      "低纹理墙面仍有明显缺口；当前结果是局部观测表面，不代表完整走廊模型。",
+      "门框等结构边缘可触发重复候选，多帧证据不等于确认裂缝。"
+    ],
     "run": "results/multiscene_v3_dense_sampling/tumvi_fisheye__optimized/global_reconstruction",
     "frames": "results/multiscene_v3_dense_sampling/tumvi_fisheye__optimized/frames",
-    "prior": "observed_only",
+    "prior": "auto",
+    "domain_coverage": 0.35,
+    "domain_points": 60,
+    "max_unsupported": 0.65,
+    "fit_order": 20,
+    "control_stations": 16,
+    "residual_gate": 0.5,
     "author": "TUM VI 数据集 / Schubert 等",
     "license": "CC BY 4.0",
     "browser_video": false

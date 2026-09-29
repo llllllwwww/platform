@@ -29,6 +29,33 @@ SCALAR = {
 }
 
 
+def write_ply(path, vertices, faces):
+    """写 binary_little_endian PLY：float32 顶点 + 紧凑 (uchar, 3×int32) 三角面。
+
+    供 regularize_tunnel / dense_tsdf / axial_reparam 共用；不依赖 torch，
+    保证非 GPU 的 refinement 链路可以 import。
+    """
+    vertices = np.ascontiguousarray(vertices, dtype='<f4')
+    faces = np.ascontiguousarray(faces, dtype='<i4')
+    header = (
+        'ply\n'
+        'format binary_little_endian 1.0\n'
+        f'element vertex {len(vertices)}\n'
+        'property float x\nproperty float y\nproperty float z\n'
+        f'element face {len(faces)}\n'
+        'property list uchar int vertex_indices\n'
+        'end_header\n'
+    )
+    face_dtype = np.dtype([('n', 'u1'), ('v', '<i4', (3,))])  # itemsize 13, packed
+    face_record = np.empty(len(faces), dtype=face_dtype)
+    face_record['n'] = 3
+    face_record['v'] = faces
+    with open(path, 'wb') as handle:
+        handle.write(header.encode('ascii'))
+        handle.write(vertices.tobytes())
+        handle.write(face_record.tobytes())
+
+
 def read_ply(path):
     """返回 (properties: {name: np.ndarray}, faces: (M,3) int64)。只读第一个 element 的顶点与面。"""
     path = Path(path)
