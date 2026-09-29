@@ -1,0 +1,56 @@
+[
+  {
+    "name": "aliked-lightglue.onnx",
+    "size": 45804950,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/aliked-lightglue.onnx",
+    "digest": "sha256:b9a5de7204648b18a8cf5dcac819f9d30de1a5961ef03756803c8b86c2dceb8d"
+  },
+  {
+    "name": "aliked-n16rot.onnx",
+    "size": 2997054,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/aliked-n16rot.onnx",
+    "digest": "sha256:39c423d0a6f03d39ec89d3d1d61853765c2fb6a8b8381376c703e5758778a547"
+  },
+  {
+    "name": "aliked-n32.onnx",
+    "size": 4205634,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/aliked-n32.onnx",
+    "digest": "sha256:a077728a02d2de1a775c66df6de8cfeb7c6b51ca57572c64c680131c988c8b3c"
+  },
+  {
+    "name": "bruteforce-matcher.onnx",
+    "size": 5014,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/bruteforce-matcher.onnx",
+    "digest": "sha256:3c1282f96d83f5ffc861a873298d08bbe5219f59af59223f5ceab5c41a182a47"
+  },
+  {
+    "name": "colmap-x64-windows-cuda.zip",
+    "size": 258390514,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/colmap-x64-windows-cuda.zip",
+    "digest": "sha256:60f77bd8e9823e6d2b39082ee665f69c91900011d5321fc54a4dfebe3de110b7"
+  },
+  {
+    "name": "colmap-x64-windows-nocuda.zip",
+    "size": 95141644,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/colmap-x64-windows-nocuda.zip",
+    "digest": "sha256:0dbaddf8d9c99138055a7a6c49ee68b19c305784b7ac4372065330d6b5294ad0"
+  },
+  {
+    "name": "sift-lightglue.onnx",
+    "size": 45806253,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/sift-lightglue.onnx",
+    "digest": "sha256:e0500228472b43f92b3d36881a09b3310d3b058b56187b246cc7b9ab6429096e"
+  },
+  {
+    "name": "vocab_tree_faiss_flickr100K_words64K_aliked_n16rot.bin",
+    "size": 18764565,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/vocab_tree_faiss_flickr100K_words64K_aliked_n16rot.bin",
+    "digest": "sha256:8b2f9bdc44ca7204d8543bb3adab4c03ba9336c84ef41220b5007991036f075e"
+  },
+  {
+    "name": "vocab_tree_faiss_flickr100K_words64K_aliked_n32.bin",
+    "size": 18764565,
+    "browser_download_url": "https://github.com/colmap/colmap/releases/download/3.13.0/vocab_tree_faiss_flickr100K_words64K_aliked_n32.bin",
+    "digest": "sha256:65619481045b8f933268f10c31ad180eb1ee7881182873efe0f5753972ef6a20"
+  }
+]

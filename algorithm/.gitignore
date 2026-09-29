@@ -1,18 +1,25 @@
-# 数据与训练产物不入库（体积大、可重新生成）
-data/
-runs/
-reports/
-third_party/
-
-# Python
+# Generated data, environments, downloads and browser profiles
+/.venv/
+/.venv-global/
+/venv/
+/data/
+/results/
+/third_party/
+/tools/
+/web/
+/outputs/
 __pycache__/
 *.py[cod]
-*.egg-info/
-.venv/
-venv/
-
-# 训练中间产物
-*.pt
 *.pth
+*.pt
 *.onnx
-*.cache
+*.npz
+*.ply
+*.db
+*.log
+*.log.*
+/research_sources/multiscene/
+*.part
+*.webm
+.env
+.env.*

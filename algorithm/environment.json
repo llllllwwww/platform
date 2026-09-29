@@ -1,0 +1,32 @@
+{
+  "numpy": {
+    "version": "2.2.6",
+    "wheel": "numpy-2.2.6-cp311-cp311-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/31/0a/f354fb7176b81747d870f7991dc763e157a934c717b67b58456bc63da3df/numpy-2.2.6-cp311-cp311-win_amd64.whl",
+    "sha256": "e8213002e427c69c45a52bbd94163084025f533a55a59d6f9c5b820774ef3303"
+  },
+  "pycolmap": {
+    "version": "3.13.0",
+    "wheel": "pycolmap-3.13.0-cp311-cp311-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/56/70/9a7c7c0a9077d005baa19b241c054bf0103d3c00b6783d5210bf206f25f0/pycolmap-3.13.0-cp311-cp311-win_amd64.whl",
+    "sha256": "e80fefab544bb57039375abd3be16108a4a079d0345270872b2387ca3ac62325"
+  },
+  "opencv-python-headless": {
+    "version": "4.11.0.86",
+    "wheel": "opencv_python_headless-4.11.0.86-cp37-abi3-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/86/8a/69176a64335aed183529207ba8bc3d329c2999d852b4f3818027203f50e6/opencv_python_headless-4.11.0.86-cp37-abi3-win_amd64.whl",
+    "sha256": "6c304df9caa7a6a5710b91709dd4786bf20a74d57672b3c31f7033cc638174ca"
+  },
+  "scipy": {
+    "version": "1.15.3",
+    "wheel": "scipy-1.15.3-cp311-cp311-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/ab/a7/0ddaf514ce8a8714f6ed243a2b391b41dbb65251affe21ee3077ec45ea9a/scipy-1.15.3-cp311-cp311-win_amd64.whl",
+    "sha256": "ae48a786a28412d744c62fd7816a4118ef97e5be0bee968ce8f0a2fba7acf3bb"
+  },
+  "pillow": {
+    "version": "11.3.0",
+    "wheel": "pillow-11.3.0-cp311-cp311-win_amd64.whl",
+    "url": "https://files.pythonhosted.org/packages/f1/cc/29c0f5d64ab8eae20f3232da8f8571660aa0ab4b8f1331da5c2f5f9a938e/pillow-11.3.0-cp311-cp311-win_amd64.whl",
+    "sha256": "1a992e86b0dd7aeb1f053cd506508c0999d710a8f07b4c791c63843fc6a807ac"
+  }
+}
