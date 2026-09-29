@@ -1,0 +1,35 @@
+{
+  "scene_id": "scene-3efe9e2f61097d97",
+  "vertices": 83615,
+  "triangles": 161446,
+  "registered_frames": 79,
+  "candidates": 2484,
+  "candidates_with_3d": 2138,
+  "hit_count": 170926,
+  "requested_count": 235369,
+  "entry": "F:\\data\\中国研究生智慧城市技术与创意设计大赛\\.publish\\platform\\algorithm\\web\\multiscene\\rail_test\\index.html",
+  "frame_evidence_count": 79,
+  "regularized": {
+    "surface_id": "72e5f5f3b5bf61dcfbec",
+    "triangles": 15232,
+    "mapping": {
+      "detections": 2484,
+      "hit_count": 48798,
+      "requested_count": 235369,
+      "usable_count": 232624,
+      "observations_by_status": {
+        "no_original_surface_evidence": 64443,
+        "outside_fitted_segment": 108835,
+        "hit": 48798,
+        "excessive_relocation": 12763,
+        "no_surface_hit": 530
+      },
+      "candidates_with_mapped_points": 742,
+      "supported_hit_count": 43508,
+      "inferred_hit_count": 5290,
+      "max_allowed_displacement_sfm_unit": 0.22409269492854939,
+      "accepted_displacement_median": 0.08800041675567621,
+      "accepted_displacement_p95": 0.20012536048889146
+    }
+  }
+}

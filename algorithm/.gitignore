@@ -6,7 +6,11 @@
 /results/
 /third_party/
 /tools/
-/web/
+# web/: offline archives stay local; only the slimmed multiscene gallery is published
+/web/*
+!/web/multiscene/
+/web/multiscene/*/assets/source.*
+/web/multiscene/*/assets/texture.png
 /outputs/
 __pycache__/
 *.py[cod]
