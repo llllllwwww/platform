@@ -27,3 +27,5 @@ __pycache__/
 *.webm
 .env
 .env.*
+# 主工作台之外的本地视频重建环境与缓存
+/video_reconstruction/

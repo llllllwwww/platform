@@ -120,6 +120,116 @@
     },
     { title: "04 / 仿真推演", items: [["simulation", "仿真验证工作台"]] },
   ];
+  const multisceneEntries = [
+    {
+      id: "overview",
+      label: "多场景总览",
+      src: "algorithm/web/multiscene/index.html",
+    },
+    {
+      id: "dvp_handheld",
+      label: "DVP 手持",
+      src: "algorithm/web/multiscene/dvp_handheld/index.html",
+    },
+    {
+      id: "rail_test",
+      label: "铁路短片",
+      src: "algorithm/web/multiscene/rail_test/index.html",
+    },
+    {
+      id: "rail_train",
+      label: "铁路长片",
+      src: "algorithm/web/multiscene/rail_train/index.html",
+    },
+    {
+      id: "tumvi_fisheye",
+      label: "TUM VI 鱼眼",
+      src: "algorithm/web/multiscene/tumvi_fisheye/index.html",
+    },
+  ];
+  let activeMultiscene = "overview";
+  const equipmentEntries = [
+    {
+      id: "vehicle",
+      no: "01",
+      name: "三臂智能检测车",
+      role: "移动作业平台 · 机械臂 · 车载雷达",
+      status: "场景已接入",
+      tone: "mint",
+      description: "平台的主作业载体，承载三臂机械臂、车载雷达、照明和车载显示单元。",
+      specs: ["车体：2.4 × 1.4 m", "速度：0.05–5 m/s", "作业：启动 / 暂停 / 停障"],
+      platform: "检测任务与设备 → 三维作业场景；支持第一人称、自由漫游和车载 HUD。",
+    },
+    {
+      id: "radar",
+      no: "02",
+      name: "车载探地雷达阵列",
+      role: "天线阵列 · B-scan · 单道波形",
+      status: "接口示意",
+      tone: "blue",
+      description: "负责衬砌内部回波采集和测线记录，平台用 B-scan、单道波形与 CSV 目录展示接入边界。",
+      specs: ["输入：矩形数值矩阵", "元数据：道间距 / 采样间隔", "输出：B-scan、单道和来源记录"],
+      platform: "雷达数据管理 → 导入 CSV + JSON；当前示意信号与真实设备格式分开标识。",
+    },
+    {
+      id: "vision",
+      no: "03",
+      name: "影像与照明单元",
+      role: "前视相机 · 补光 · 候选证据",
+      status: "复核链路",
+      tone: "mint",
+      description: "采集隧道表面影像、同帧画面和邻帧证据，为第二模块的影像三维复核提供来源。",
+      specs: ["视图：前视 / 鱼眼示意", "证据：原始帧 / 掩码 / 邻帧", "用途：候选复核，不等于确诊"],
+      platform: "智能解析 → 病害清单与隧道影像三维复核；可返回场景总览和主工作台。",
+    },
+    {
+      id: "pose",
+      no: "04",
+      name: "定位与姿态采集",
+      role: "里程编码器 · IMU · 环位关联",
+      status: "定位关联",
+      tone: "amber",
+      description: "把车辆行进、扫描轨迹和姿态信息关联到里程、环号和三维坐标，支撑后续定位评估。",
+      specs: ["关联：里程 / 环号 / 轨迹", "姿态：车辆方向与扫描角", "校核：单位和坐标定义"],
+      platform: "检测任务参数与三维数字孪生共享状态；当前为可复现的几何演示配置。",
+    },
+    {
+      id: "edge",
+      no: "05",
+      name: "边缘采集与数据终端",
+      role: "采集控制 · 本地存储 · 状态回传",
+      status: "数据接入",
+      tone: "blue",
+      description: "现场负责采集控制、缓存和数据整理的终端，保证原始矩阵、元数据和作业日志可追溯。",
+      specs: ["数据：CSV / JSON / 日志", "状态：任务进度与设备状态", "边界：本地浏览器演示，无后端服务"],
+      platform: "本地工作台与浏览器 localStorage；重要原始数据需单独保存和备份。",
+    },
+    {
+      id: "safety",
+      no: "06",
+      name: "安全与辅助保障",
+      role: "警示 · 照明 · 通信 · 人员防护",
+      status: "作业保障",
+      tone: "amber",
+      description: "用于现场封锁、照明、通信和人员安全的辅助设备，保证检测任务按计划执行。",
+      specs: ["安全：警示灯 / 反光标识", "环境：照明 / 通风检查", "管理：对讲和作业记录"],
+      platform: "任务前置检查和作业日志；平台只记录演示状态，不替代现场安全审批。",
+    },
+  ];
+  let activeEquipment = "vehicle";
+  const parentRoutes = {
+    tasks: "overview",
+    radar: "tasks",
+    processing: "radar",
+    defects: "processing",
+    twin: "defects",
+    health: "twin",
+    alerts: "health",
+    reports: "alerts",
+    simulation: "overview",
+  };
+  let routeTrail = [],
+    pendingAnchor = "";
   const icon = (k) =>
     `<span class="nav-icon"><svg viewBox="0 0 24 24"><path d="${icons[k] || icons.overview}"/></svg></span>`;
   const risk = (r) => `<span class="risk risk-${r}">${r} · ${NAMES[r]}</span>`;
@@ -130,6 +240,25 @@
   const note = (text, type = "") => `<div class="note ${type}">${text}</div>`;
   const panel = (title, body, aside = "", padding = true) =>
     `<section class="panel"><div class="panel-head"><h2>${title}</h2>${aside}</div>${padding ? '<div class="panel-body">' : ""}${body}${padding ? "</div>" : ""}</section>`;
+  const equipmentSvg = (id) =>
+    ({
+      vehicle: `<svg viewBox="0 0 240 116" role="img" aria-label="三臂智能检测车示意图"><path d="M31 78h151l16-12h20" fill="none" stroke="#56d9b1" stroke-width="3" stroke-linecap="round"/><rect x="36" y="47" width="135" height="39" rx="8" fill="#162c3d" stroke="#56d9b1" stroke-width="2"/><path d="M55 47 68 27h60l24 20" fill="#1c3a4b" stroke="#7f9bb5" stroke-width="2"/><path d="M79 47V22l-16-12M79 22l18-14M115 47V19l18-14M115 19l-15-10" fill="none" stroke="#efb65d" stroke-width="3" stroke-linecap="round"/><rect x="88" y="53" width="32" height="13" rx="3" fill="#0b1018" stroke="#72afff"/><circle cx="66" cy="88" r="13" fill="#0b1018" stroke="#efb65d" stroke-width="3"/><circle cx="145" cy="88" r="13" fill="#0b1018" stroke="#efb65d" stroke-width="3"/><path d="M186 37h19v21h-19zM205 47h15" fill="none" stroke="#56d9b1" stroke-width="2"/><text x="120" y="108" fill="#9fb2c4" font-size="9" text-anchor="middle">车载移动扫描平台</text></svg>`,
+      radar: `<svg viewBox="0 0 240 116" role="img" aria-label="车载探地雷达阵列示意图"><rect x="57" y="22" width="126" height="35" rx="6" fill="#162c3d" stroke="#72afff" stroke-width="2"/><path d="M75 57v22h90V57" fill="#1b3c4c" stroke="#56d9b1" stroke-width="2"/><path d="M89 79v13M108 79v13M127 79v13M146 79v13" stroke="#efb65d" stroke-width="5" stroke-linecap="round"/><path d="M78 39h84M89 31h62" stroke="#9fb2c4" stroke-width="2"/><path d="M183 33q22 14 0 28M194 25q36 22 0 44" fill="none" stroke="#56d9b1" stroke-width="2" opacity=".85"/><path d="M57 33Q35 46 57 60M46 25Q10 46 46 68" fill="none" stroke="#72afff" stroke-width="2" opacity=".75"/><text x="120" y="108" fill="#9fb2c4" font-size="9" text-anchor="middle">天线阵列 · B-scan</text></svg>`,
+      vision: `<svg viewBox="0 0 240 116" role="img" aria-label="影像与照明单元示意图"><rect x="57" y="35" width="88" height="48" rx="8" fill="#162c3d" stroke="#56d9b1" stroke-width="2"/><circle cx="104" cy="59" r="20" fill="#0b1018" stroke="#72afff" stroke-width="4"/><circle cx="104" cy="59" r="8" fill="#56d9b1"/><rect x="74" y="25" width="27" height="10" rx="3" fill="#efb65d"/><path d="M145 47h31l28 12-28 12h-31z" fill="#1d3b4d" stroke="#f5b942" stroke-width="2" opacity=".9"/><path d="M177 46 220 28M177 72l43 18" stroke="#f5b942" stroke-width="2" stroke-dasharray="4 4"/><circle cx="183" cy="59" r="4" fill="#ff6b6b"/><text x="120" y="108" fill="#9fb2c4" font-size="9" text-anchor="middle">前视相机 · 补光 · 同帧证据</text></svg>`,
+      pose: `<svg viewBox="0 0 240 116" role="img" aria-label="定位与姿态采集示意图"><circle cx="79" cy="61" r="34" fill="#162c3d" stroke="#efb65d" stroke-width="3"/><circle cx="79" cy="61" r="11" fill="#0b1018" stroke="#56d9b1" stroke-width="3"/><path d="M79 22v78M40 61h78" stroke="#7f9bb5" stroke-dasharray="3 4"/><rect x="132" y="31" width="58" height="45" rx="6" fill="#1c3a4b" stroke="#72afff" stroke-width="2"/><path d="M145 44h32M145 54h20M145 64h27" stroke="#56d9b1" stroke-width="2"/><path d="M113 61h18" stroke="#efb65d" stroke-width="3" marker-end="url(#equipmentArrow)"/><path d="M30 100h177" stroke="#7f9bb5" stroke-width="2"/><circle cx="41" cy="100" r="4" fill="#56d9b1"/><circle cx="102" cy="100" r="4" fill="#56d9b1"/><circle cx="174" cy="100" r="4" fill="#56d9b1"/><text x="120" y="17" fill="#9fb2c4" font-size="9" text-anchor="middle">里程 · IMU · 环位</text></svg>`,
+      edge: `<svg viewBox="0 0 240 116" role="img" aria-label="边缘采集与数据终端示意图"><path d="M49 31h142l13 65H36z" fill="#162c3d" stroke="#72afff" stroke-width="2"/><rect x="63" y="43" width="114" height="39" rx="4" fill="#0b1018" stroke="#56d9b1"/><path d="M76 55h38M76 64h63M76 73h29" stroke="#9fb2c4" stroke-width="2"/><circle cx="155" cy="55" r="4" fill="#56d9b1"/><circle cx="155" cy="68" r="4" fill="#efb65d"/><path d="M103 98h35" stroke="#7f9bb5" stroke-width="4" stroke-linecap="round"/><path d="M191 53h22M191 64h32M191 75h22" stroke="#56d9b1" stroke-width="2"/><text x="120" y="112" fill="#9fb2c4" font-size="9" text-anchor="middle">采集控制 · 本地缓存 · 日志</text></svg>`,
+      safety: `<svg viewBox="0 0 240 116" role="img" aria-label="安全与辅助保障示意图"><path d="M39 83h162" stroke="#7f9bb5" stroke-width="3"/><path d="M57 82 73 39l16 43M106 82l16-43 16 43M155 82l16-43 16 43" fill="#3a2d22" stroke="#f5b942" stroke-width="3"/><path d="M67 56h12M116 56h12M165 56h12" stroke="#ff6b6b" stroke-width="4"/><path d="M52 28q18-19 36 0v8H52z" fill="#1c3a4b" stroke="#56d9b1" stroke-width="2"/><path d="M43 28h54" stroke="#56d9b1" stroke-width="3"/><path d="M205 28v54M195 38h20M195 50h20M195 62h20" stroke="#72afff" stroke-width="2"/><text x="120" y="108" fill="#9fb2c4" font-size="9" text-anchor="middle">警示 · 照明 · 通信 · 防护</text></svg>`,
+    })[id] || "";
+  const equipmentDetail = (id = activeEquipment) => {
+    const item = equipmentEntries.find((x) => x.id === id) || equipmentEntries[0];
+    return `<div class="equipment-detail-head"><div><div class="equipment-kicker">SELECTED EQUIPMENT · ${item.no}</div><h3>${escape(item.name)}</h3><p>${escape(item.description)}</p></div><span class="badge ${item.tone}">${escape(item.status)}</span></div><div class="equipment-specs">${item.specs.map((x) => `<span>${escape(x)}</span>`).join("")}</div><div class="equipment-platform"><b>平台关联</b><span>${escape(item.platform)}</span></div>`;
+  };
+  const equipmentPanel = () =>
+    panel(
+      "项目设备示意",
+      `<div class="equipment-intro"><div><b>现场采集链路</b><p>用示意图快速认识本项目需要的设备、数据流和平台入口；点击卡片查看配置说明。</p></div><span class="badge mint">6 类设备 / 组件</span></div><div class="equipment-flow" aria-label="设备数据链路"><span>现场采集</span><i>→</i><span>边缘记录</span><i>→</i><span>智能解析</span><i>→</i><span>三维复核</span></div><div class="equipment-grid">${equipmentEntries.map((item) => `<button type="button" class="equipment-card${activeEquipment === item.id ? " active" : ""}" data-action="equipment-select" data-equipment="${item.id}" aria-pressed="${activeEquipment === item.id}"><span class="equipment-card-top"><span class="equipment-no">${item.no}</span><span class="badge ${item.tone}">${escape(item.status)}</span></span><span class="equipment-visual">${equipmentSvg(item.id)}</span><strong>${escape(item.name)}</strong><small>${escape(item.role)}</small><span class="equipment-more">查看配置 <span>→</span></span></button>`).join("")}</div><div class="equipment-detail" id="equipmentDetail">${equipmentDetail()}</div><p class="muted equipment-note">图形为项目配置示意，不代表当前已经接入真实硬件；真实设备接入仍需补充驱动、采集协议、标定和现场安全验证。</p>`,
+      '<span class="badge mint">设备链路 · 演示</span>',
+    );
   const metric = (label, value, unit, hint, target, cls = "") =>
     `<button class="metric" data-nav="${target}"><div class="label">${label}<span>↗</span></div><div class="value ${cls}">${value}<small>${unit}</small></div><div class="hint">${hint}</div></button>`;
   function toast(message, error = false) {
@@ -137,7 +266,7 @@
     el.textContent = message;
     el.className = "toast show" + (error ? " error" : "");
     clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => el.classList.remove("show"), 5500);
+    toast.timer = setTimeout(() => el.classList.remove("show"), 3000);
   }
   function save() {
     try {
@@ -232,8 +361,48 @@
     }
     location.hash = next;
   }
+  function syncRouteTrail(next) {
+    const last = routeTrail[routeTrail.length - 1],
+      previous = routeTrail[routeTrail.length - 2];
+    if (!last) routeTrail = [next];
+    else if (last !== next) {
+      if (previous === next) routeTrail.pop();
+      else {
+        routeTrail.push(next);
+        if (routeTrail.length > 32) routeTrail.shift();
+      }
+    }
+    return next;
+  }
+  function backRoute(fallback) {
+    const target =
+      routeTrail.length > 1
+        ? routeTrail[routeTrail.length - 2]
+        : fallback || parentRoutes[route] || "overview";
+    if (routeTrail.length > 1) routeTrail.pop();
+    location.hash = target === route ? fallback || parentRoutes[route] || "overview" : target;
+  }
+  function scrollToAnchor(id) {
+    const scroll = () => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        pendingAnchor = "";
+      }
+    };
+    pendingAnchor = id;
+    if (route === "defects") requestAnimationFrame(scroll);
+  }
+  function pageNavigation() {
+    if (route === "overview") return "";
+    const fallback = parentRoutes[route] || "overview";
+    return (
+      btn("← 返回上一页", "go-back", "subtle back-button", `data-fallback="${fallback}"`) +
+      btn("返回项目总览", "go-overview", "small subtle")
+    );
+  }
   function heading(title, desc, part, actions = "") {
-    return `<div class="page-heading"><div><div class="eyebrow">${part}</div><h1>${title}</h1><p>${desc}</p></div><div class="heading-actions">${actions}</div></div>`;
+    return `<div class="page-heading"><div><div class="eyebrow">${part}</div><h1>${title}</h1><p>${desc}</p></div><div class="heading-actions">${pageNavigation()}${actions}</div></div>`;
   }
   function tabs(items) {
     return `<div class="subnav">${items.map(([id, name]) => `<a href="#${id}" class="${route === id ? "active" : ""}">${name}</a>`).join("")}</div>`;
@@ -273,7 +442,23 @@
     ${btn("洞内视角", "view", "small", 'data-view="in"')}${btn("横断面", "view", "small", 'data-view="cross"')}${btn("拱顶特写", "view", "small", 'data-view="crown"')}${btn("仰拱特写", "view", "small", 'data-view="invert"')}${btn("剖切总览", "iso-cut", "small")}${btn("自动旋转", "rotate", "small")}${btn("上一病害", "step-defect", "small", 'data-dir="-1"')}${btn("下一病害", "step-defect", "small", 'data-dir="1"')}${btn("重置视角", "view", "small", 'data-view="iso"')}
     </div><div class="scene-tools">${check("shell", "管片衬砌")}${check("defect", "病害对象")}${check("rebar", "双层钢筋")}${check("grout", "注浆层")}${check("ground", "五层地层")}${check("profile", "断面偏差")}${check("car", "检测车 / 机械臂")}${check("ray", "雷达射线")}${check("coverage", "作业轨迹")}${check("risk", "风险热力")}${check("labels", "病害标签")}${check("labelsAll", "全部标注")}${check("hud", "车载雷达面板")}</div>
     <div class="scene-tools">${check("stars", "星空背景")}${check("city", "城市背景")}<label>衬砌透明度<input aria-label="衬砌透明度" id="opacity" type="range" min="0.05" max="0.8" step="0.05" value="${pref.opacity}"></label><label>纵向剖切<input aria-label="纵向剖切" id="cut" type="range" min="0" max="48" step="0.5" value="${pref.cut ?? 48}"></label><label class="background-upload">本地背景图片 <input type="file" id="backgroundImage" accept="image/png,image/jpeg,image/webp" aria-label="选择本地背景图片"></label>${btn("恢复默认背景", "restore-background", "small subtle")}</div>
-    <div class="scene-shortcuts">自由漫游：W/A/S/D 移动，Q/E 升降，Shift 加速；第一人称：鼠标环视、空格切换扫掠，Esc 退出。暂停只冻结作业，相机仍可操作。图片仅在本地读取。</div></details>`;
+     <div class="scene-shortcuts">自由漫游：W/A/S/D 移动，Q/E 升降，Shift 加速；第一人称：鼠标环视、空格切换扫掠，Esc 退出。暂停只冻结作业，相机仍可操作。图片仅在本地读取。</div></details>`;
+  }
+  function multiscenePanel() {
+    const active =
+      multisceneEntries.find((entry) => entry.id === activeMultiscene) ||
+      multisceneEntries[0];
+    return `<div id="image-review" class="image-review-anchor">${panel(
+      "隧道影像三维复核",
+      `<div class="review-context"><span class="badge mint">02 / 智能解析</span><span>病害候选识别后的影像、三维表面与同帧证据复核</span></div><div class="multiscene-switcher" role="tablist" aria-label="隧道影像三维复核场景">${multisceneEntries
+        .map(
+          (entry) =>
+            `<button class="small ${entry.id === active.id ? "primary" : "subtle"}" data-action="multiscene-select" data-scene="${entry.id}" role="tab" aria-selected="${entry.id === active.id}">${entry.label}</button>`,
+        )
+        .join("")}</div><div class="multiscene-frame-wrap"><iframe id="multisceneFrame" title="${active.label}" src="${active.src}" loading="lazy"></iframe></div><p class="muted multiscene-note">该复核区属于智能解析模块，用于把识别候选与原始影像、三维表面和相邻帧证据对应起来；三维数字孪生模块继续负责工程空间定位、健康评估和运维决策。页面保留 algorithm/web/multiscene 中原有的场景切换、三维旋转、候选筛选、帧证据和录像回放，不覆盖原始文件。</p>`,
+      btn("返回病害清单", "scroll-defects-top", "small subtle"),
+      false,
+    )}</div>`;
   }
   function post(data) {
     const f = $("#twinFrame");
@@ -454,12 +639,12 @@
     return (
       heading(
         "检测任务与设备",
-        "设置检测范围，观察车辆与机械臂作业，并追踪测线覆盖。",
+        "先查看项目设备配置，再设置检测范围，观察车辆与机械臂作业，并追踪测线覆盖。",
         "01 / 对应计划第 1 部分",
         btn("新建检测任务", "new-task", "primary"),
       ) +
       moduleTabs() +
-      `<div class="grid-main"><div>${panel("检测车作业场景", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, '<span class="badge mint">车辆与设备 · 演示</span>', false)}${panel(
+      `<div class="grid-main"><div>${equipmentPanel()}${panel("检测车作业场景", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, '<span class="badge mint">车辆与设备 · 演示</span>', false)}${panel(
         "任务列表",
         `<div class="table-wrap"><table><thead><tr><th>任务</th><th>检测范围</th><th>速度</th><th>进度</th><th>状态</th><th>操作</th></tr></thead><tbody>${batchTasks()
           .map(
@@ -557,7 +742,8 @@
         "沿计划第 2 部分组织计算步骤，输入、参数、输出和算法版本全程可查。",
         "02 / 对应计划第 2 部分",
         btn("运行数值预处理", "run-preprocess", "primary") +
-          btn("查看病害台账", "go-defects", "subtle"),
+          btn("查看病害台账", "go-defects", "subtle") +
+          btn("进入影像三维复核", "go-image-review", "subtle"),
       ) +
       moduleTabs() +
       radarControls() +
@@ -587,20 +773,20 @@
       ) +
       moduleTabs() +
       filters() +
-      `<div class="grid-main"><div>${panel("病害记录 · " + C.getDefects(state).length + " 处", table(C.getDefects(state)), '<span class="badge">演示台账</span>', false)}${note("空洞、富水、裂缝等类型来自原平台演示台账，不表示已通过当前雷达输入识别。物理尺寸为台账设定值。", "info")}</div><aside>${detail()}</aside></div>`
+      `<div class="grid-main"><div>${panel("病害记录 · " + C.getDefects(state).length + " 处", table(C.getDefects(state)), '<span class="badge">演示台账</span>', false)}${note("空洞、富水、裂缝等类型来自原平台演示台账，不表示已通过当前雷达输入识别。物理尺寸为台账设定值。", "info")}</div><aside>${detail()}</aside></div>${multiscenePanel()}`
     );
   }
   function twinPage() {
     return (
       heading(
         "三维数字孪生",
-        "把病害、检测作业、风险区段和雷达证据定位到同一座隧道。",
+        "把病害、检测作业、风险区段和雷达证据定位到同一座隧道；影像候选复核位于 02 / 智能解析。",
         "03 / 对应计划第 3 部分",
-        ``,
+        btn("返回影像三维复核", "go-image-review", "subtle"),
       ) +
       moduleTabs() +
       filters() +
-      `<div class="grid-main"><div>${panel("隧道空间定位", scene(true, true), '<span class="badge">X 轴沿里程前进</span>', false)}${panel("环向展开图", `<canvas id="unfold" class="unfold" aria-label="隧道病害环向展开图"></canvas><p class="muted" style="font-size:10px">横轴：里程；纵轴：环向角，0° 拱顶、90° 右墙。点击标记联动三维与雷达。</p>`)}${panel("历史批次变化", `<div id="historyComparison">${historyTable()}</div>`)}</div><aside>${detail()}${ringSection()}${panel("坐标定义", `<p class="code">X = 里程 − 3128 m<br>Y = (2.7 + 埋深) × cos θ<br>Z = (2.7 + 埋深) × sin θ</p><p class="muted" style="font-size:11px">病害位于管片环中心；X/Y/Z 单位 m。径向深度从衬砌内表面向外。历史批次按演示比例派生，不代表历史实测。</p>`)}</aside></div>`
+       `<div class="grid-main"><div>${panel("隧道空间定位", scene(true, true), '<span class="badge">X 轴沿里程前进</span>', false)}${panel("环向展开图", `<canvas id="unfold" class="unfold" aria-label="隧道病害环向展开图"></canvas><p class="muted" style="font-size:10px">横轴：里程；纵轴：环向角，0° 拱顶、90° 右墙。点击标记联动三维与雷达。</p>`)}${panel("历史批次变化", `<div id="historyComparison">${historyTable()}</div>`)}</div><aside>${detail()}${ringSection()}${panel("坐标定义", `<p class="code">X = 里程 − 3128 m<br>Y = (2.7 + 埋深) × cos θ<br>Z = (2.7 + 埋深) × sin θ</p><p class="muted" style="font-size:11px">病害位于管片环中心；X/Y/Z 单位 m。径向深度从衬砌内表面向外。历史批次按演示比例派生，不代表历史实测。</p>`)}</aside></div>`
     );
   }
   function historyTable() {
@@ -838,7 +1024,7 @@
     const snap = C.exportSnapshot(state),
       body = reportBody(snap);
     const css =
-      "body{margin:30px auto;max-width:1040px;font:14px/1.8 Microsoft YaHei,Arial;color:#243346;padding:0 25px}h2{font-size:28px}h3{margin-top:28px}table{width:100%;border-collapse:collapse;font-size:11px}td,th{padding:9px;border:1px solid #ccd6de;text-align:left}th{background:#ecf2f5}.report-meta{font-size:11px;color:#617285}.report-kpis{display:flex;gap:40px;margin:24px 0}.report-kpis b{font-size:30px;display:block}.note{padding:12px;background:#e9f2ee}img{max-width:100%}.report-chart{display:flex;align-items:end;gap:9px;height:125px;border-bottom:1px solid #bbb}.report-chart div{flex:1;text-align:center;font-size:9px}.report-chart span{display:block;background:#4b8c80}p{overflow-wrap:anywhere}tr{break-inside:avoid}.report-evidence{margin:20px 0;break-inside:avoid}.report-chart{break-inside:avoid}h2,h3{break-after:avoid}@page{size:A4;margin:14mm}@media print{button{display:none}body{margin:0;padding:0}}";
+      "body{margin:0;background:#0b1018;color:#e8f0f7;font:14px/1.8 \"Microsoft YaHei\",\"PingFang SC\",Arial,sans-serif;padding:30px 25px}button{background:#1c2a3b;border:1px solid #33465b;border-radius:7px;color:#e8f0f7;padding:8px 13px;margin:0 auto 18px;display:block;cursor:pointer}button:hover{background:#283e50;border-color:#56d9b1}a{color:#56d9b1}.report-paper{max-width:1040px;margin:0 auto;background:#131b27;color:#e8f0f7;border:1px solid rgba(86,217,177,.14);border-radius:14px;box-shadow:0 16px 36px rgba(0,0,0,.18);padding:30px 34px}.report-paper h2{color:#e8f0f7;font-size:28px;margin:0 0 8px}.report-paper h3{color:#56d9b1;margin-top:28px}.report-paper p{color:#b9c9d7}.report-paper table{width:100%;border-collapse:collapse;color:#e8f0f7;font-size:11px}.report-paper td,.report-paper th{padding:9px;border:1px solid rgba(86,217,177,.12);text-align:left}.report-paper th{background:#111b28;color:#9fb2c4}.report-paper tr:nth-child(even){background:rgba(127,155,181,.025)}.report-paper tr:hover{background:rgba(86,217,177,.06)}.report-meta{font-size:11px;color:#7f9bb5}.report-kpis{display:flex;gap:40px;margin:24px 0}.report-kpis b{color:#56d9b1;font-size:30px;display:block}.report-kpis small{color:#9fb2c4}.note{padding:12px;background:rgba(86,217,177,.08);border:1px solid rgba(86,217,177,.2);border-radius:7px;color:#bfeee0}.report-paper img{max-width:100%;height:auto;border:1px solid rgba(86,217,177,.14);border-radius:8px}.report-chart{display:flex;align-items:end;gap:9px;height:125px;border-bottom:1px solid rgba(86,217,177,.2)}.report-chart div{flex:1;color:#9fb2c4;text-align:center;font-size:9px}.report-chart span{display:block;background:linear-gradient(180deg,#56d9b1,#2f806e);border-radius:3px 3px 0 0}p{overflow-wrap:anywhere}tr{break-inside:avoid}.report-evidence{margin:20px 0;break-inside:avoid}.report-chart{break-inside:avoid}h2,h3{break-after:avoid}@page{size:A4;margin:14mm}@media print{button{display:none}body{margin:0;padding:0;background:#fff;color:#243346}.report-paper{background:#fff;color:#243346;border:0;box-shadow:none;padding:0}.report-paper h2,.report-paper h3{color:#243346}.report-paper p,.report-paper th,.report-paper td,.report-meta,.report-kpis small,.report-chart div{color:#243346}.report-paper th{background:#ecf2f5}.report-paper td,.report-paper th{border-color:#ccd6de}.note{background:#e9f2ee;border-color:#bdd0c9;color:#49685f}.report-kpis b{color:#243346}.report-chart{border-bottom-color:#bbb}.report-chart span{background:#4b8c80}}";
     download(
       "隧道检测报告_" + state.batch + ".html",
       '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>隧道检测评估报告</title><style>' +
@@ -1067,8 +1253,8 @@
       reports: reportsPage,
       simulation: simulationPage,
     };
-    route = location.hash.slice(1).split("?")[0] || "overview";
-    if (!routes[route]) route = "overview";
+    const requestedRoute = location.hash.slice(1).split("?")[0] || "overview";
+    route = syncRouteTrail(routes[requestedRoute] ? requestedRoute : "overview");
     $("#navigation").innerHTML = groups
       .map(
         (g) =>
@@ -1437,6 +1623,30 @@
   }
   const actions = {
     "close-modal": closeModal,
+    "multiscene-select": (el) => {
+      activeMultiscene = el.dataset.scene || "overview";
+      render();
+    },
+    "equipment-select": (el) => {
+      activeEquipment = el.dataset.equipment || "vehicle";
+      $$(".equipment-card").forEach((card) => {
+        const active = card.dataset.equipment === activeEquipment;
+        card.classList.toggle("active", active);
+        card.setAttribute("aria-pressed", String(active));
+      });
+      const detail = $("#equipmentDetail");
+      if (detail) detail.innerHTML = equipmentDetail(activeEquipment);
+    },
+    "go-back": (el) => backRoute(el.dataset.fallback),
+    "go-overview": () => navigate("overview"),
+    "go-image-review": () => {
+      scrollToAnchor("image-review");
+      if (route !== "defects") navigate("defects");
+    },
+    "scroll-defects-top": () => {
+      if (route !== "defects") navigate("defects");
+      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+    },
     "go-tasks": () => navigate("tasks"),
     "go-processing": () => navigate("processing"),
     "go-defects": () => navigate("defects"),
@@ -2039,14 +2249,51 @@
   });
   window.addEventListener("hashchange", () => {
     render();
-    window.scrollTo(0, 0);
+    if (pendingAnchor) {
+      const id = pendingAnchor;
+      requestAnimationFrame(() => {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        pendingAnchor = "";
+      });
+    } else window.scrollTo(0, 0);
   });
+  const syncTopbarState = () =>
+    document.body.classList.toggle("is-scrolled", window.scrollY > 8);
+  window.addEventListener("scroll", syncTopbarState, { passive: true });
+  syncTopbarState();
   window.addEventListener("beforeunload", () => {
     if (taskRunning) {
       task().status = "paused";
       save();
     }
   });
+  function setupMobileNavigation() {
+    const sidebar = $(".sidebar");
+    if (!sidebar || $("#sidebarToggle")) return;
+    const toggle = document.createElement("button");
+    toggle.id = "sidebarToggle";
+    toggle.className = "sidebar-toggle";
+    toggle.type = "button";
+    toggle.setAttribute("aria-label", "打开导航");
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.innerHTML = "<span></span><span></span><span></span>";
+    toggle.addEventListener("click", () => {
+      const open = document.body.classList.toggle("sidebar-open");
+      toggle.setAttribute("aria-expanded", String(open));
+      toggle.setAttribute("aria-label", open ? "关闭导航" : "打开导航");
+    });
+    document.body.insertBefore(toggle, document.body.firstChild);
+    document.addEventListener("click", (event) => {
+      if (window.innerWidth > 767 || !document.body.classList.contains("sidebar-open"))
+        return;
+      if (event.target.closest(".nav-item")) {
+        document.body.classList.remove("sidebar-open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-label", "打开导航");
+      }
+    });
+  }
+  setupMobileNavigation();
   $("#helpButton").onclick = () => {
     guideDialog();
   };
