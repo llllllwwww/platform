@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "name": "雷达接入格式样例（非现场实测）",
+  "source": "程序生成的接口测试样例，不代表真实雷达采集",
+  "frameId": "FORMAT-001",
+  "matrix": [[1, 2, 1, 0], [2, 3, 2, 1], [0, 1, 0, -1]],
+  "metadata": {"traceSpacingM": 0.02, "sampleIntervalNs": 0.1, "timeWindowNs": 0.2, "epsilon": 6, "amplitudeUnit": "示意归一化振幅"},
+  "lineId": "EXAMPLE-L01"
+}

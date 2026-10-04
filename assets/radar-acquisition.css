@@ -1,0 +1,40 @@
+/* 外部雷达接入与独立仿真区域，沿用工作台暗色主题。 */
+.radar-acquisition [hidden] { display: none !important; }
+.radar-input-intro, .radar-input-boundary { font-size: 11px; color: #9fb2c4; line-height: 1.8; }
+.radar-input-intro { margin: 0 0 14px; }
+.radar-input-tabs { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 14px; }
+.radar-input-tabs button { font-size: 11px; background: #111b28; border-color: rgba(127,155,181,.18); }
+.radar-input-tabs button.active { color: var(--mint); background: rgba(86,217,177,.08); border-color: rgba(86,217,177,.4); }
+.radar-source-pane { background: rgba(11,16,24,.4); border: 1px solid rgba(86,217,177,.13); border-radius: 10px; padding: 14px; }
+.radar-file-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.radar-source-pane .field { margin: 0 0 8px; }
+.radar-source-pane input[type=file] { max-width: 100%; font-size: 11px; }
+.radar-source-pane input::file-selector-button { color: var(--mint); background: rgba(86,217,177,.08); border: 1px solid rgba(86,217,177,.28); border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+.radar-input-help { font-size: 10px; color: #9fb2c4; line-height: 1.8; margin: 9px 0; }
+.radar-sample-link { font-size: 11px; padding: 7px; }
+.radar-network-form { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1.2fr) minmax(0,.8fr); gap: 10px; align-items: end; }
+.radar-network-form button { justify-self: start; font-size: 11px; }
+.radar-input-status { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px; margin: 14px 0; }
+.radar-input-status span { color: var(--muted); }
+#radarReceiveDot { width: 7px; height: 7px; border-radius: 50%; background: #7f9bb5; }
+#radarReceiveDot[data-state=active] { background: var(--mint); box-shadow: 0 0 8px rgba(86,217,177,.35); }
+#radarReceiveDot[data-state=error] { background: var(--red); }
+.radar-source-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 12px; background: #0e1722; border-radius: 8px; margin-bottom: 13px; }
+.radar-source-controls label { display: flex; flex-direction: column; gap: 5px; font-size: 10px; color: #9fb2c4; min-width: 0; }
+.radar-source-controls select, .radar-source-controls input { min-width: 80px; max-width: 100%; }
+#radarArchiveSelector { flex: 1 1 270px; min-width: 0; }
+#radarArchiveSelector label { width: 100%; }
+.radar-external-view { padding: 9px; border: 1px solid rgba(86,217,177,.13); border-radius: 10px; background: #0b131e; }
+.radar-acquisition .radar-caption { flex-wrap: wrap; gap: 6px 14px; overflow-wrap: anywhere; }
+.radar-external-view .empty { min-height: 200px; }
+.radar-input-meta { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 9px; margin: 13px 0; }
+.radar-input-meta > div { background: rgba(11,16,24,.4); padding: 10px; border: 1px solid rgba(127,155,181,.12); border-radius: 7px; min-width: 0; }
+.radar-input-meta small { display: block; font-size: 9px; color: var(--muted); margin-bottom: 4px; }
+.radar-input-meta b { font-size: 11px; font-weight: 500; color: #bdcedc; overflow-wrap: anywhere; }
+.radar-input-boundary { border-top: 1px solid rgba(86,217,177,.12); padding-top: 12px; margin-top: 14px; font-size: 10px; }
+.radar-directory { margin-top: 18px; border-top: 1px solid rgba(86,217,177,.12); padding-top: 14px; }
+.radar-directory h3 { font-size: 12px; margin: 0 0 10px; }
+.radar-feedback { font-size: 11px; padding: 10px; background: rgba(245,185,66,.07); border: 1px solid rgba(245,185,66,.24); color: #edcf91; margin-top: 12px; border-radius: 7px; }
+#radarSimulation .panel-body > .filter-bar { margin: 0 0 14px; }
+@media(max-width:1100px) { .radar-input-meta { grid-template-columns: repeat(2,minmax(0,1fr)); } .radar-network-form { grid-template-columns: 1fr 1fr; } .radar-endpoint { grid-column: 1 / -1; } }
+@media(max-width:767px) { .radar-file-grid, .radar-network-form, .radar-input-meta { grid-template-columns: minmax(0,1fr); } .radar-source-controls { align-items: stretch; } .radar-source-controls label { flex: 1 1 120px; } .radar-source-pane { padding: 11px; } }

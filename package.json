@@ -7,7 +7,9 @@
     "test": "node tests/core.test.js && node tests/adapters.test.js",
     "test:browser": "node tests/browser.integration.cjs",
     "test:retained": "node tests/retained-components.cjs",
-    "test:entry": "node tests/local-entry.cjs"
+    "test:entry": "node tests/local-entry.cjs",
+    "test:video": "node tests/video-monitor.cjs",
+    "test:radar": "node tests/radar-acquisition.cjs"
   },
   "devDependencies": {
     "playwright": "1.63.0"

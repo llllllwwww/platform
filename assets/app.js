@@ -180,7 +180,7 @@
       tone: "mint",
       description: "采集隧道表面影像、同帧画面和邻帧证据，为第二模块的影像三维复核提供来源。",
       specs: ["视图：前视 / 鱼眼示意", "证据：原始帧 / 掩码 / 邻帧", "用途：候选复核，不等于确诊"],
-      platform: "智能解析 → 病害清单与隧道影像三维复核；可返回场景总览和主工作台。",
+      platform: "检测采集 → 现场视频接入；智能解析 → 病害清单与隧道影像三维复核。",
     },
     {
       id: "pose",
@@ -639,12 +639,12 @@
     return (
       heading(
         "检测任务与设备",
-        "先查看项目设备配置，再设置检测范围，观察车辆与机械臂作业，并追踪测线覆盖。",
+        "先查看设备配置，接入现场视频，再使用独立仿真场景验证检测范围、车辆与机械臂作业。",
         "01 / 对应计划第 1 部分",
         btn("新建检测任务", "new-task", "primary"),
       ) +
       moduleTabs() +
-      `<div class="grid-main"><div>${equipmentPanel()}${panel("检测车作业场景", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, '<span class="badge mint">车辆与设备 · 演示</span>', false)}${panel(
+      `<div class="grid-main"><div>${equipmentPanel()}<div id="liveMonitorMount"></div>${panel("检测车作业场景 · 仿真演示", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, '<span class="badge amber">02 / 仿真作业 · 演示</span>', false)}${panel(
         "任务列表",
         `<div class="table-wrap"><table><thead><tr><th>任务</th><th>检测范围</th><th>速度</th><th>进度</th><th>状态</th><th>操作</th></tr></thead><tbody>${batchTasks()
           .map(
@@ -678,59 +678,46 @@
       voidPosition: 0.55,
     });
   }
-  function radarData() {
-    if (
-      radarMode === "import" &&
-      state.radars[selectedRadar]?.batchId === state.batch
-    )
-      return state.radars[selectedRadar];
+  function radarDemoData() {
     const d = chosen();
     return {
-      id: "demo-" + d.id,
-      name: d.lineId + " · " + d.id + " 示意证据",
-      matrix: demoMatrix(d),
-      rows: 96,
-      cols: 160,
-      source: "demo",
-      metadata: {},
+      id: "demo-" + d.id, name: d.lineId + " · " + d.id + " 示意证据",
+      matrix: demoMatrix(d), rows: 96, cols: 160, source: "demo", metadata: {},
       warnings: ["程序生成的示意信号；不用于尺寸反演或算法准确率评估。"],
       axes: { x: "道号", y: "采样点" },
     };
   }
-  function radarOptions() {
-    return `<label>当前数据 <select id="radarSource" aria-label="选择雷达数据"><option value="demo" ${radarMode === "demo" ? "selected" : ""}>内置示意 · ${chosen().lineId} / ${chosen().id}</option>${state.radars.map((r, i) => (r.batchId !== state.batch ? "" : `<option value="${i}" ${radarMode === "import" && selectedRadar === i ? "selected" : ""}>导入 · ${escape(r.name)}</option>`)).join("")}</select></label>`;
+  function radarData() {
+    if (radarMode === "import" && state.radars[selectedRadar]?.batchId === state.batch)
+      return state.radars[selectedRadar];
+    return radarDemoData();
   }
-  function radarControls() {
-    const r = radarData();
+  function radarOptions() {
+    return `<label>当前数据 <select id="radarSource" aria-label="选择雷达数据"><option value="demo" ${radarMode === "demo" ? "selected" : ""}>内置示意 · ${chosen().lineId} / ${chosen().id}</option>${state.radars.map((r, i) => (r.batchId !== state.batch ? "" : `<option value="${i}" ${radarMode === "import" && selectedRadar === i ? "selected" : ""}>外部快照 · ${escape(r.name)}</option>`)).join("")}</select></label>`;
+  }
+  function radarControls(demoOnly = false) {
+    const r = demoOnly ? radarDemoData() : radarData();
     trace = Math.min(trace, r.cols - 1);
-    return `<div class="filter-bar">${radarOptions()}<label>色标增益<select id="palette"><option value="1" ${palette === 1 ? "selected" : ""}>标准 ×1</option><option value="2" ${palette === 2 ? "selected" : ""}>增强 ×2</option><option value="0.5" ${palette === 0.5 ? "selected" : ""}>柔和 ×0.5</option></select></label><label>横向缩放<select id="radarZoom"><option value="1" ${zoom === 1 ? "selected" : ""}>1 倍</option><option value="2" ${zoom === 2 ? "selected" : ""}>2 倍</option><option value="4" ${zoom === 4 ? "selected" : ""}>4 倍</option></select></label><label>单道序号<input type="number" id="trace" value="${trace}" min="0" max="${r.cols - 1}" step="1" aria-label="单道序号"></label>${r.source === "demo" ? `<label><span><input type="checkbox" id="roiOverlay" ${overlayRegions ? "checked" : ""}> 示意异常区域</span></label>` : ""}</div>`;
+    return `<div class="filter-bar">${demoOnly ? "" : radarOptions()}<label>色标增益<select id="palette"><option value="1" ${palette === 1 ? "selected" : ""}>标准 ×1</option><option value="2" ${palette === 2 ? "selected" : ""}>增强 ×2</option><option value="0.5" ${palette === 0.5 ? "selected" : ""}>柔和 ×0.5</option></select></label><label>横向缩放<select id="radarZoom"><option value="1" ${zoom === 1 ? "selected" : ""}>1 倍</option><option value="2" ${zoom === 2 ? "selected" : ""}>2 倍</option><option value="4" ${zoom === 4 ? "selected" : ""}>4 倍</option></select></label><label>单道序号<input type="number" id="trace" value="${trace}" min="0" max="${r.cols - 1}" step="1" aria-label="单道序号"></label>${r.source === "demo" ? `<label><span><input type="checkbox" id="roiOverlay" ${overlayRegions ? "checked" : ""}> 示意异常区域</span></label>` : ""}</div>`;
+  }
+  function radarContext() {
+    const current = task();
+    return {batchId:state.batch, batchName:state.batches.find(b=>b.id===state.batch)?.name || state.batch,
+      taskId:current.id, taskName:current.name, lineId:current.lineId};
+  }
+  function radarTransportLabel(r) {
+    return ({"http":"HTTP 网关帧","websocket":"WebSocket 网关帧","file-json":"本地 JSON","file-csv":"本地 CSV"})[r.provenance?.transport] || "本地 CSV";
+  }
+  function radarDirectory() {
+    const entries=state.radars.map((r,i)=>({r,i})).filter(({r})=>r.batchId===state.batch);
+    if(!entries.length)return '<div class="empty">当前批次没有外部数据；导入文件或保存接入帧后在这里选用。</div>';
+    return `<div class="table-wrap"><table><thead><tr><th>数据 / 任务 / 测线</th><th>接入方式与来源声明</th><th>矩阵 / 标定</th><th>操作</th></tr></thead><tbody>${entries.map(({r,i})=>`<tr><td>${escape(r.name)}<br><small class="muted">${escape(r.taskId || "未关联任务")} / ${escape(r.lineId || r.metadata?.lineId || "未提供测线")}</small></td><td>${radarTransportLabel(r)}<br><small class="muted">${escape(r.provenance?.declaredSource || r.metadata?.source || "真实性未核验")}</small></td><td>${r.rows} × ${r.cols}<br><small class="muted">${r.warnings.length ? "有来源或标定提示" : "标定字段完整（未核验）"}</small></td><td>${btn("选为处理输入", "use-radar", "small", `data-id="${i}"`)}</td></tr>`).join("")}</tbody></table></div>`;
   }
   function radarPage() {
-    const r = radarData(),
-      m = r.metadata || {};
-    return (
-      heading(
-        "雷达数据管理",
-        "查看 B-scan 与单道波形；导入的原始矩阵保持独立来源和标定信息。",
-        "01 / 对应计划第 1 部分",
-        btn("下载 CSV 样例", "sample-csv", "subtle") +
-          btn("进入智能处理", "go-processing", "primary"),
-      ) +
-      moduleTabs() +
-      radarControls() +
-      `<div class="grid-main"><div>${panel("原始 B-scan", `<div class="radar-wrap"><canvas id="rawRadar" aria-label="原始B-scan雷达图"></canvas></div><div class="radar-caption"><span>${escape(r.name)}</span><span>${r.source === "import" ? "本地 CSV 解析" : "程序示意信号"} · ${r.rows} 点 × ${r.cols} 道</span></div><div class="radar-wrap wave"><canvas id="wave" aria-label="单道波形"></canvas></div><div class="radar-caption"><span>单道 #<span id="traceNumber">${trace}</span> · 振幅未标定</span><span>点击剖面可切换单道</span></div>${note(r.warnings.join(" "), "info")}`)}${panel(
-        "数据目录",
-        `<div class="table-wrap"><table><thead><tr><th>数据</th><th>来源</th><th>矩阵</th><th>状态</th></tr></thead><tbody><tr><td>L-01 / L-02 / L-03</td><td>病害参数派生示意</td><td>96 × 160</td><td>可预览</td></tr>${state.radars
-          .filter((x) => x.batchId === state.batch)
-          .map(
-            (x) =>
-              `<tr><td>${escape(x.name)}</td><td>本地 CSV</td><td>${x.rows} × ${x.cols}</td><td>${x.warnings.length ? "缺少部分标定" : "标定字段完整"}</td></tr>`,
-          )
-          .join("")}</tbody></table></div>`,
-        "",
-        false,
-      )}</div><aside>${panel("导入雷达矩阵", `<div class="upload-box"><b>CSV + JSON 元数据</b><p>行 = 采样点，列 = 道；纯数值，无表头。</p><input type="file" id="csvFile" accept=".csv" aria-label="选择CSV雷达文件"></div><label class="field" style="margin-top:14px">JSON 元数据（可选）<input type="file" id="metadataFile" accept=".json" aria-label="选择JSON元数据文件"></label><textarea id="metadata" rows="5" aria-label="JSON元数据内容" placeholder='{"traceSpacingM":0.02,"sampleIntervalNs":0.1,"epsilon":6}'>${escape(metadataText)}</textarea><div class="actions">${btn("解析并导入", "import-csv", "primary")}${btn("检查示例错误", "invalid-demo", "small subtle")}</div><div id="importMessage" role="alert">${importError ? note(escape(importError), "warning") : importNotice ? note(escape(importNotice)) : ""}</div><p class="muted" style="font-size:10px">上限 5 MB、512 采样点 × 2048 道。DZT/DT1 等设备格式需适配器，不会按 CSV 伪解析。</p>`)}${panel("采集与完整性", `<div class="mini-stat"><small>采样点 / 道数</small><span>${r.rows} / ${r.cols}</span></div><div class="mini-stat"><small>道间距</small><span>${m.traceSpacingM ? m.traceSpacingM + " m" : "未标定"}</span></div><div class="mini-stat"><small>采样间隔</small><span>${m.sampleIntervalNs ? m.sampleIntervalNs + " ns" : "未标定"}</span></div><div class="mini-stat"><small>时间窗</small><span>${m.timeWindowNs ? m.timeWindowNs + " ns" : "未提供"}</span></div><div class="mini-stat"><small>传播介电参数</small><span>${m.epsilon || "未提供"}</span></div><div class="mini-stat"><small>矩阵完整性</small><span class="accent">矩形 · 有限数值</span></div>`)}</aside></div>`
-    );
+    const r=radarDemoData();
+    return heading("雷达数据管理", "先接入外部原始矩阵与网关数据帧，再对照独立仿真示例；保存的快照可送入智能处理。", "01 / 对应计划第 1 部分",
+      btn("下载 CSV 样例", "sample-csv", "subtle")+btn("进入智能处理", "go-processing", "primary")) + moduleTabs() +
+      `<div id="radarAcquisitionMount"></div><div id="radarSimulation">${panel("雷达信号 · 仿真演示", radarControls(true)+`<div class="radar-wrap"><canvas id="rawRadar" aria-label="仿真B-scan雷达图"></canvas></div><div class="radar-caption"><span>${escape(r.name)}</span><span>程序示意信号 · ${r.rows} 点 × ${r.cols} 道</span></div><div class="radar-wrap wave"><canvas id="wave" aria-label="仿真单道波形"></canvas></div><div class="radar-caption"><span>单道 #<span id="traceNumber">${trace}</span> · 示意归一化振幅</span><span>点击剖面可切换单道</span></div>${note(r.warnings.join(" "), "info")}<div class="table-wrap"><table><thead><tr><th>数据</th><th>来源</th><th>矩阵</th><th>状态</th></tr></thead><tbody><tr><td>L-01 / L-02 / L-03</td><td>病害参数派生示意</td><td>96 × 160</td><td>可预览</td></tr></tbody></table></div>`, '<span class="badge amber">02 / 仿真数据 · 演示</span>')}</div>`;
   }
   function processingPage() {
     const r = radarData(),
@@ -748,7 +735,7 @@
       moduleTabs() +
       radarControls() +
       `<div class="flow">${[
-        ["原始数据", r.source === "import" ? "本地导入" : "内置示意", "已加载"],
+        ["原始数据", r.source === "import" ? radarTransportLabel(r) + " · 外部快照" : "内置示意", "已加载"],
         ["数值预处理", "减背景 + 时间增益", ready ? "已完成" : "可运行"],
         ["RCAN 杂波抑制", "残差通道注意网络", "待接入"],
         ["RTM 逆时偏移", "全波方程成像接口", "待接入"],
@@ -1048,6 +1035,8 @@
     overlay = true,
     gain = palette,
     meta = {},
+    selectedTrace = trace,
+    selectedZoom = zoom,
   ) {
     if (!canvas || !matrix) return;
     const W = 640,
@@ -1083,17 +1072,14 @@
     ctx.font = "10px Segoe UI,Microsoft YaHei";
     ctx.fillStyle = "#88a3b9";
     ctx.fillText(meta.traceSpacingM ? "距离 / m" : "道号", W - 70, H - 5);
-    for (let i = 0; i < 5; i++) {
-      let c = Math.round((i * (cols - 1)) / 4);
-      ctx.fillText(
-        meta.traceSpacingM ? fmt(c * meta.traceSpacingM, 2) : c,
-        45 + (i * (W - 70)) / 4,
-        H - 14,
-      );
-      const rr = Math.round((i * (rows - 1)) / 4),
-        dt = meta.sampleIntervalNs || (meta.timeWindowNs || 0) / (rows - 1);
-      ctx.fillText(dt ? fmt(rr * dt, 1) : rr, 4, 19 + (i * (H - 49)) / 4);
-    }
+    const axisValue = value => value !== 0 && (Math.abs(value) < 0.001 || Math.abs(value) >= 10000) ? value.toExponential(1) : fmt(value, 2);
+    const xTicks = [...new Set([0, 1, 2, 3, 4].map(i => Math.round(i * (cols - 1) / 4)))];
+    ctx.textAlign = "center";
+    for (const c of xTicks) ctx.fillText(meta.traceSpacingM ? axisValue(c * meta.traceSpacingM) : c, 45 + c / (cols - 1) * (W - 57), H - 14);
+    ctx.textAlign = "start";
+    const yTicks = [...new Set([0, 1, 2, 3, 4].map(i => Math.round(i * (rows - 1) / 4)))];
+    const dt = meta.sampleIntervalNs || (meta.timeWindowNs || 0) / (rows - 1);
+    for (const rr of yTicks) ctx.fillText(dt ? axisValue(rr * dt) : rr, 4, 15 + rr / (rows - 1) * (H - 38));
     ctx.fillText(
       meta.sampleIntervalNs || meta.timeWindowNs ? "ns" : "采样",
       3,
@@ -1102,15 +1088,15 @@
     if (overlay) {
       ctx.strokeStyle = "#67e4bd";
       ctx.lineWidth = 1;
-      const x = 45 + (Math.min(trace, cols - 1) / (cols - 1)) * (W - 57);
+      const x = 45 + (Math.min(selectedTrace, cols - 1) / (cols - 1)) * (W - 57);
       ctx.beginPath();
       ctx.moveTo(x, 12);
       ctx.lineTo(x, H - 27);
       ctx.stroke();
     }
-    canvas.style.width = zoom * 100 + "%";
+    canvas.style.width = selectedZoom * 100 + "%";
   }
-  function drawWave(canvas, r) {
+  function drawWave(canvas, r, selectedTrace = trace) {
     if (!canvas) return;
     const matrix = r.matrix,
       W = 640,
@@ -1125,7 +1111,7 @@
     ctx.moveTo(30, H / 2);
     ctx.lineTo(W - 10, H / 2);
     ctx.stroke();
-    let vals = matrix.map((row) => row[Math.min(trace, row.length - 1)]),
+    let vals = matrix.map((row) => row[Math.min(selectedTrace, row.length - 1)]),
       max = Math.max(...vals.map(Math.abs), 0.000001);
     ctx.strokeStyle = "#6adbb6";
     ctx.beginPath();
@@ -1138,7 +1124,7 @@
     ctx.fillStyle = "#708ba2";
     ctx.font = "10px sans-serif";
     ctx.fillText("0", 12, 63);
-    ctx.fillText("采样点 →", 560, 114);
+    ctx.fillText(r.metadata?.sampleIntervalNs || r.metadata?.timeWindowNs ? "双程时间 / ns →" : "采样点 →", 540, 114);
   }
   function drawUnfold() {
     const cv = $("#unfold");
@@ -1197,7 +1183,7 @@
     };
   }
   function drawCanvases() {
-    const r = radarData();
+    const r = route === "radar" ? radarDemoData() : radarData();
     paintRadar($("#rawRadar"), r.matrix, true, palette, r.metadata);
     if (r.source === "demo" && overlayRegions && $("#rawRadar"))
       drawRoi($("#rawRadar"), chosen());
@@ -1271,8 +1257,29 @@
       radarMode === "import" && ["radar", "processing"].includes(route)
         ? "导入矩阵 · 病害仍为演示"
         : "演示数据";
+    window.TunnelVideoMonitor?.beforeRender(route);
+    window.TunnelRadarAcquisition?.beforeRender(route, radarContext());
     try {
       $("#page").innerHTML = routes[route]();
+      if (route === "tasks") {
+        const t = task();
+        window.TunnelVideoMonitor?.mount($("#liveMonitorMount"), {
+          batchId: state.batch,
+          batchName: state.batches.find((b) => b.id === state.batch)?.name || state.batch,
+          taskId: t.id,
+          taskName: t.name,
+        });
+      }
+      if (route === "radar") {
+        window.TunnelRadarAcquisition?.mount($("#radarAcquisitionMount"), {
+          context: radarContext(),
+          selected: () => radarMode === "import" && state.radars[selectedRadar]?.batchId === state.batch ? state.radars[selectedRadar] : null,
+          options: radarOptions, directory: radarDirectory, metadataText,
+          importMessage: importError || importNotice,
+          paint: (data, view) => { paintRadar(view.raw, data.matrix, true, view.gain, data.metadata, view.trace, view.zoom); drawWave(view.wave, data, view.trace); },
+          saveFrame: (data, association) => { storeRadarRecord(data, association); importNotice="网络接入帧已保存；已选为智能处理输入。"; render(); },
+        });
+      }
       drawCanvases();
     } catch (e) {
       $("#page").innerHTML =
@@ -1323,12 +1330,12 @@
       [
         "tasks",
         "配置检测任务",
-        "设置里程、车速和扫描范围，开始作业并观察三臂检测车。",
+        "查看设备、接入现场视频，再设置仿真参数并观察三臂检测车。",
       ],
       [
         "radar",
         "检查雷达数据",
-        "预览示意信号，或使用 CSV 与 JSON 导入自己的原始矩阵。",
+        "先导入外部矩阵或接收网关帧，保存为处理快照；下方保留独立示意信号。",
       ],
       [
         "processing",
@@ -1446,41 +1453,49 @@
       save();
     }
   }
+  function storeRadarRecord(data, association) {
+    if (association.batchId !== state.batch || association.taskId !== task().id)
+      throw Error("任务或批次在读取期间变更，未保存旧来源，请重新导入。");
+    const r=JSON.parse(JSON.stringify(data));
+    r.id="R-"+Date.now()+"-"+Math.random().toString(36).slice(2,8);
+    r.source="import";r.importedAt=new Date().toISOString();
+    r.batchId=association.batchId;r.taskId=association.taskId;
+    r.lineId=r.lineId || r.metadata?.lineId || association.lineId;
+    state.radars.push(r);selectedRadar=state.radars.length-1;radarMode="import";trace=0;processed=null;
+    log("导入外部雷达数据 "+r.name+"，"+r.rows+"×"+r.cols);
+    return r;
+  }
   async function importCSV() {
-    importError = "";
-    importNotice = "";
+    importError="";importNotice="";
+    const association=radarContext();
     try {
-      const f = $("#csvFile").files[0];
-      if (!f) throw Error("请先选择 CSV 文件。");
-      if (!/\.csv$/i.test(f.name))
-        throw Error("暂不支持该设备格式，只支持数值 CSV。");
-      if (f.size > C.LIMITS.bytes) throw Error("文件超过 5 MB 上限。");
-      metadataText = $("#metadata").value;
-      const r = C.parseCSV(await f.text(), metadataText.trim() || {});
-      r.id = "R-" + Date.now();
-      r.name = f.name;
-      r.importedAt = new Date().toISOString();
-      r.batchId = state.batch;
-      r.taskId = task().id;
-      state.radars.push(r);
-      selectedRadar = state.radars.length - 1;
-      radarMode = "import";
-      trace = 0;
-      importNotice =
-        "已解析 " +
-        r.rows +
-        " × " +
-        r.cols +
-        " 数值矩阵；" +
-        (r.warnings.length ? "请补充标定元数据。" : "元数据字段完整。");
-      processed = null;
-      log("导入雷达数据 " + f.name + "，" + r.rows + "×" + r.cols);
-      render();
-      toast(importNotice);
-    } catch (e) {
-      importError = e.message;
-      $("#importMessage").innerHTML = note(escape(importError), "warning");
-      toast(importError, true);
+      const f=$("#csvFile").files[0];
+      if(!f)throw Error("请先选择 CSV 或 JSON 雷达文件。");
+      if(!/\.(csv|json)$/i.test(f.name))throw Error("暂不支持该设备格式，只支持数值 CSV 或 JSON 接入帧。");
+      if(f.size>C.LIMITS.bytes)throw Error("文件超过 5 MB 上限。");
+      metadataText=$("#metadata").value;
+      const text=await f.text();
+      if(route!=="radar")throw Error("已离开雷达页，未导入文件，请返回后重试。");
+      let r;
+      if(/\.json$/i.test(f.name)) {
+        r=window.TunnelRadarAcquisition.parseFrame(text,association);
+        r.provenance={transport:"file-json",declaredSource:r.declaredSource,adapterVersion:"radar-frame-1.0"};
+      } else {
+        r=C.parseCSV(text,metadataText.trim() || {});
+        for(const key of ["batchId","taskId"])if(r.metadata[key]!=null && r.metadata[key]!==association[key])throw Error("元数据 "+key+" 与当前任务关联不一致。");
+        if(r.metadata.amplitudeUnit!=null && (typeof r.metadata.amplitudeUnit!=="string" || r.metadata.amplitudeUnit.length>128))throw Error("amplitudeUnit 应为不超过 128 字的文本。");
+        r.capturedAt=window.TunnelRadarAcquisition.normalizeTime(r.metadata.capturedAt);
+        if(!r.capturedAt)r.warnings.push("未提供源端采集时间；本机导入时间不代表现场采集时间。");
+        r.provenance={transport:"file-csv",declaredSource:typeof r.metadata.source==="string"?r.metadata.source:"未声明，真实性未核验",adapterVersion:r.version};
+      }
+      r.name=f.name;r.receivedAt=new Date().toISOString();
+      storeRadarRecord(r,association);
+      importNotice="已解析 "+r.rows+" × "+r.cols+" 数值矩阵；外部来源待核验，"+(r.warnings.length?"请核对来源与标定提示。":"标定字段完整（未核验）。");
+      render();toast(importNotice);
+    } catch(e) {
+      importError=e.message;
+      if($("#importMessage"))$("#importMessage").textContent=importError;
+      toast(importError,true);
     }
   }
   function runPreprocess() {
@@ -1732,6 +1747,11 @@
         `<h2>新建检测任务</h2><form id="newTaskForm"><label class="field">任务名称<input id="newTaskName" maxlength="80" placeholder="例如：拱顶加密复检" required></label><div class="form-grid" style="margin-top:16px">${field("起点里程 / m", "newStart", 3128, 3128, 3175.9, 0.1)}${field("终点里程 / m", "newEnd", 3176, 3128.1, 3176, 0.1)}</div><div class="actions"><button type="submit" class="primary">创建任务</button></div></form>`,
       ),
     "import-csv": importCSV,
+    "use-radar": (el) => {
+      const index=Number(el.dataset.id), r=state.radars[index];
+      if(!r || r.batchId!==state.batch)throw Error("该数据不属于当前批次。");
+      selectedRadar=index;radarMode="import";trace=0;processed=null;render();
+    },
     "sample-csv": () => {
       download(
         "雷达矩阵样例.csv",
@@ -2045,7 +2065,7 @@
       }
       if (el.id === "trace") {
         const n = Number(el.value);
-        if (!Number.isInteger(n) || n < 0 || n >= radarData().cols)
+        if (!Number.isInteger(n) || n < 0 || n >= (route === "radar" ? radarDemoData() : radarData()).cols)
           throw Error("道号超出有效范围。");
         trace = n;
         drawCanvases();
@@ -2256,6 +2276,10 @@
         pendingAnchor = "";
       });
     } else window.scrollTo(0, 0);
+  });
+  document.addEventListener("tunnel-monitor-state", (event) => {
+    if (route === "tasks") $("#dataBadge").textContent = event.detail.active
+      ? "外部视频 · 任务仍为仿真" : "演示数据";
   });
   const syncTopbarState = () =>
     document.body.classList.toggle("is-scrolled", window.scrollY > 8);
