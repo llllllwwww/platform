@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="隧雷智检隧道智能检测与数字孪生平台的项目介绍、系统架构、模块关联和分步使用说明">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%2356d9b1%22/%3E%3C/svg%3E" />
 <title>隧雷智检 · 平台架构与使用流程</title>
 <style>
 :root{color-scheme:dark;--bg:#0b1018;--deep:#111823;--panel:#131b27;--raised:#161f2c;--border:rgba(86,217,177,.16);--border2:rgba(86,217,177,.34);--mint:#56d9b1;--mintbg:rgba(86,217,177,.12);--amber:#f5b942;--coral:#ff6b6b;--blue:#72afff;--text:#e8f0f7;--muted:#9fb2c4;--soft:#6e8397;--mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;--sans:"PingFang SC","Microsoft YaHei","Segoe UI",sans-serif;--ease:cubic-bezier(.22,1,.36,1)}
@@ -11,7 +12,7 @@
 </style>
 </head>
 <body>
-<header class="topbar"><a class="brand" href="index.html#overview"><span class="brand-mark">隧</span><span><strong>隧雷智检</strong><small>TUNNEL INTELLIGENCE</small></span></a><div class="top-actions"><span class="status"><i class="status-dot"></i>本地架构说明 · 2026-10-03</span><a href="index.html#overview">返回工作台</a><button class="button" id="printButton" type="button">打印 / PDF</button></div></header>
+<header class="topbar"><a class="brand" href="index.html#overview"><span class="brand-mark">隧</span><span><strong>隧雷智检</strong><small>TUNNEL INTELLIGENCE</small></span></a><div class="top-actions"><span class="status"><i class="status-dot"></i>本地架构说明 · 2026-10-04</span><a href="index.html#overview">返回工作台</a><button class="button" id="printButton" type="button">打印 / PDF</button></div></header>
 <main class="page">
 <section class="hero" id="top"><div class="eyebrow">PLATFORM MAP · WORKFLOW · MODULE RELATIONS</div><h1>隧道智能检测与数字孪生平台<br><span style="color:var(--mint)">架构、模块关联与使用流程</span></h1><p class="hero-copy">这是一份面向项目成员、演示人员和后续开发人员的总览说明。它把当前本地工作台的项目目标、四个业务模块、共享数据关系、三维场景交互和从启动到导出的完整操作路线放在同一页中，便于快速理解平台如何协同工作。</p><div class="hero-actions"><a class="button primary" href="#manual">从第一步开始使用</a><a class="button" href="#architecture">查看系统架构</a><a class="button" href="#modules">查看四个业务模块</a></div><div class="metric-row"><div class="metric"><b>4</b><span>一级业务模块</span></div><div class="metric"><b>10</b><span>主工作台路由</span></div><div class="metric"><b>16</b><span>演示病害记录</span></div><div class="metric"><b>48 m</b><span>示范隧道范围</span></div></div></section>
 <nav class="toc" aria-label="本页目录"><a href="#intro">项目介绍</a><a href="#architecture">系统架构</a><a href="#modules">业务模块</a><a href="#relations">模块关联</a><a href="#manual">分步说明书</a><a href="#multiscene">隧道影像复核</a><a href="#limits">边界说明</a></nav>
