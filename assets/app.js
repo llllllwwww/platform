@@ -61,6 +61,25 @@
   state.maintenance = state.maintenance || [];
   state.simulation = state.simulation || {};
   state.processing = state.processing || {};
+  // 清理已经移除的识别模型选择；保留输入、数值处理结果与其他业务数据。
+  function clearRetiredModelChoice(record) {
+    if (!record || typeof record !== "object") return false;
+    const hadChoice = Object.prototype.hasOwnProperty.call(record, "model"),
+      oldChoice = record.model,
+      message = typeof record.message === "string" ? record.message : "";
+    const obsoleteFailure = record.status === "failed" && (
+      (typeof oldChoice === "string" && oldChoice.length > 0 && message.includes(oldChoice)) ||
+      (/算法.*未接入/.test(message) && !message.includes("RCAN") && !message.includes("RTM"))
+    );
+    if (hadChoice) delete record.model;
+    if (obsoleteFailure) record.message = "旧识别模型入口已移除；当前影像检测使用独立裂缝分割流程。";
+    return hadChoice || obsoleteFailure;
+  }
+  let retiredChoiceCleared = clearRetiredModelChoice(state.processing);
+  for (const record of Object.values(state.processingByBatch)) {
+    retiredChoiceCleared = clearRetiredModelChoice(record) || retiredChoiceCleared;
+  }
+  if (retiredChoiceCleared) save();
   state.scenePrefs = {
     shell: true,
     defect: true,
@@ -438,10 +457,10 @@
     const pref = state.scenePrefs;
     const check = (name, label) =>
       `<label><input type="checkbox" data-layer="${name}" ${pref[name] ? "checked" : ""}>${label}</label>`;
-    return `<div class="scene ${large ? "large" : ""}"><div class="scene-tags"><span class="badge mint">数字孪生 · 演示</span><span class="badge">40 环 / 48 m</span></div><iframe id="twinFrame" title="隧道三维交互场景" src="assets/tunnel-scene.html"></iframe><div class="scene-note">鼠标旋转 / 缩放 / 平移 · F 第一人称 · P 启停 · G 自由漫游</div></div>
+    return `<div class="scene ${large ? "large" : ""}"><div class="scene-tags"><span class="badge mint" data-scene-data>${evidenceActive()?"疑似位置 · 仿真":"数字孪生 · 演示"}</span><span class="badge">40 环 / 48 m</span></div><iframe id="twinFrame" title="隧道三维交互场景" src="assets/tunnel-scene.html"></iframe><div class="scene-note">鼠标旋转 / 缩放 / 平移 · F 第一人称 · P 启停 · G 自由漫游</div></div>
     <div class="scene-tools">${btn("全景", "view", "small", 'data-view="iso"')}${btn("侧视", "view", "small", 'data-view="side"')}${btn("俯视", "view", "small", 'data-view="top"')}${btn("第一人称视角", "roam", "small")}${btn(taskRunning ? "暂停检测" : "启动 / 继续", "scene-run", "small primary")}${btn("自由漫游", "fly", "small")}${btn("全屏", "fullscreen-scene", "small subtle")}</div>
     <details class="scene-settings" ${controls ? "open" : ""}><summary>场景工具、图层与背景</summary><div class="scene-tools">
-    ${btn("洞内视角", "view", "small", 'data-view="in"')}${btn("横断面", "view", "small", 'data-view="cross"')}${btn("拱顶特写", "view", "small", 'data-view="crown"')}${btn("仰拱特写", "view", "small", 'data-view="invert"')}${btn("剖切总览", "iso-cut", "small")}${btn("自动旋转", "rotate", "small")}${btn("上一病害", "step-defect", "small", 'data-dir="-1"')}${btn("下一病害", "step-defect", "small", 'data-dir="1"')}${btn("重置视角", "view", "small", 'data-view="iso"')}
+    ${btn("洞内视角", "view", "small", 'data-view="in"')}${btn("横断面", "view", "small", 'data-view="cross"')}${btn("拱顶特写", "view", "small", 'data-view="crown"')}${btn("仰拱特写", "view", "small", 'data-view="invert"')}${btn("剖切总览", "iso-cut", "small")}${btn("自动旋转", "rotate", "small")}${btn(evidenceActive()?"上一疑似点":"上一病害", "step-defect", "small", 'data-dir="-1"')}${btn(evidenceActive()?"下一疑似点":"下一病害", "step-defect", "small", 'data-dir="1"')}${btn("重置视角", "view", "small", 'data-view="iso"')}
     </div><div class="scene-tools">${check("shell", "管片衬砌")}${check("defect", "病害对象")}${check("rebar", "双层钢筋")}${check("grout", "注浆层")}${check("ground", "五层地层")}${check("profile", "断面偏差")}${check("car", "检测车 / 机械臂")}${check("ray", "雷达射线")}${check("coverage", "作业轨迹")}${check("risk", "风险热力")}${check("labels", "病害标签")}${check("labelsAll", "全部标注")}${check("hud", "车载雷达面板")}</div>
     <div class="scene-tools">${check("stars", "星空背景")}${check("city", "城市背景")}<label>衬砌透明度<input aria-label="衬砌透明度" id="opacity" type="range" min="0.05" max="0.8" step="0.05" value="${pref.opacity}"></label><label>纵向剖切<input aria-label="纵向剖切" id="cut" type="range" min="0" max="48" step="0.5" value="${pref.cut ?? 48}"></label><label class="background-upload">本地背景图片 <input type="file" id="backgroundImage" accept="image/png,image/jpeg,image/webp" aria-label="选择本地背景图片"></label>${btn("恢复默认背景", "restore-background", "small subtle")}</div>
      <div class="scene-shortcuts">自由漫游：W/A/S/D 移动，Q/E 升降，Shift 加速；第一人称：鼠标环视、空格切换扫掠，Esc 退出。暂停只冻结作业，相机仍可操作。图片仅在本地读取。</div></details>`;
@@ -481,16 +500,18 @@
     const needsTwinLayout=route==="twin"&&(evidenceActive()!==!!$("#evidenceUnfold"));
     if(route==="radar"||needsTwinLayout)render();else {window.TunnelEvidenceLink.refresh();drawCanvases();}
     syncScene();
-    const badge=$("#taskSceneDataBadge");if(badge){badge.textContent=evidenceActive()?"02 / 同源病害 · 顺序位置对应":"02 / 仿真作业 · 演示";badge.className="badge "+(evidenceActive()?"mint":"amber");}
+    const badge=$("#taskSceneDataBadge");if(badge){badge.textContent=evidenceActive()?"02 / 同源疑似点 · 顺序位置对应":"02 / 仿真作业 · 演示";badge.className="badge "+(evidenceActive()?"mint":"amber");}
     if(evidenceActive())$("#dataBadge").textContent="现场标注 · 相对位置对应";
+    $$('[data-action="step-defect"]').forEach(button=>{button.textContent=(button.dataset.dir==="-1"?"上一":"下一")+(evidenceActive()?"疑似点":"病害");});
+    $$("[data-scene-data]").forEach(badge=>{badge.textContent=evidenceActive()?"疑似位置 · 仿真":"数字孪生 · 演示";});
     const count=$("#taskEvidenceCount");if(count)count.textContent=window.TunnelEvidenceCore.records(state,evidenceContext()).length+" 条记录";
   }
-  function selectEvidence(id,align=false){const r=window.TunnelEvidenceCore.records(state,evidenceContext()).find(x=>x.id===id);if(!r)return;state.evidenceSelectedId=id;window.TunnelEvidenceCore.setMode(state,evidenceContext(),"evidence");if(align){if(taskRunning)toggleTask();const t=task();t.progress=(r.mileage-t.start)/(t.end-t.start);t.status="paused";}save();syncScene();if(align)post({type:"select",id});window.TunnelEvidenceLink.refresh();}
+  function selectEvidence(id,align=false){const r=window.TunnelEvidenceCore.records(state,evidenceContext()).find(x=>x.id===id);if(!r)return;if(align&&route==="tasks"&&!r.anchors.some(a=>a.kind==="video"&&a.sourceId===window.TunnelVideoMonitor.evidenceIdentity().sourceId&&a.mappingRule==="relative-order-1.0"))window.TunnelEvidenceLink.setFollow(false);state.evidenceSelectedId=id;window.TunnelEvidenceCore.setMode(state,evidenceContext(),"evidence");if(align){if(taskRunning)toggleTask();const t=task();t.progress=(r.mileage-t.start)/(t.end-t.start);t.status="paused";refreshPlayback();if($("#taskPercent"))$("#taskPercent").textContent=fmt(t.progress*100)+"%";if($("#taskBar"))$("#taskBar").style.width=t.progress*100+"%";if($("#taskDistance"))$("#taskDistance").textContent="相对对齐位置 "+fmt(t.progress*(t.end-t.start))+" m";}save();syncScene();if(align)post({type:"select",id});window.TunnelEvidenceLink.refresh();}
   function syncScene() {
     const a = C.assess(state);
     post({
       type: "sync",
-      defects: evidenceActive() ? window.TunnelEvidenceCore.scene(state, evidenceContext()) : C.getDefects(state),
+      defects: evidenceActive() ? window.TunnelEvidenceCore.scene(state, evidenceContext(), {positionOnly:route==="tasks"}) : C.getDefects(state),
       selectedId: evidenceActive() ? state.evidenceSelectedId : state.selectedId,
       evidenceMode: evidenceActive(),
       shi: a.shi,
@@ -655,12 +676,12 @@
     return (
       '<div class="task-page-layout">' + heading(
         "检测任务与设备",
-        "左侧看现场视频，右侧核对仿真；在同一工作区完成病害标注、车辆操作与证据复核。",
+        "左侧看现场视频，右侧核对仿真；在同一工作区记录疑似位置、操作车辆与核对证据。",
         "01 / 对应计划第 1 部分",
         btn("新建检测任务", "new-task", "primary"),
       ) +
       moduleTabs() +
-      `<details class="task-drawer task-equipment-drawer" id="taskEquipmentDrawer" ${taskPanels.equipment ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("tasks")}</span><span><b>设备配置与项目示意</b><small>检测车 · 雷达 · 影像 · 定位 · 边缘终端 · 安全保障</small></span><span class="badge mint">6 类设备</span></summary><div class="task-drawer-body">${equipmentPanel()}</div></details><section class="task-workspace" aria-label="现场视频与仿真左右对照"><div class="task-workspace-head"><div><span class="task-workspace-kicker">LIVE VIDEO / DIGITAL TWIN</span><h2>现场与仿真 · 同屏对照</h2><p>${escape(t.name)}<span> / </span>${mile(t.start)} — ${mile(t.end)}</p></div><div class="task-workspace-actions">${btn("冻结视频并标注", "task-capture-video", "primary", 'disabled id="taskCaptureVideo"')}${btn("病害标注与对应", "task-evidence", "subtle")}${btn("作业参数", "task-parameters", "subtle")}</div></div><div class="task-comparison-grid" id="taskComparison"><div class="task-video-pane"><div id="liveMonitorMount"></div><details class="task-drawer task-evidence-drawer" id="taskEvidenceDrawer" ${taskPanels.evidence || state.pendingVideoEvidence ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("defects")}</span><span><b>病害标注与对应</b><small>冻结原帧、统一类型与位置、查看对应证据</small></span><span class="badge mint" id="taskEvidenceCount">${evidenceTotal} 条记录</span></summary><div class="task-drawer-body"><div id="evidenceMount"></div></div></details></div><aside class="task-simulation-pane" aria-label="对应仿真作业场景">${panel("检测车作业场景 · 仿真演示", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, evidenceActive()?'<span class="badge mint" id="taskSceneDataBadge">02 / 同源病害 · 顺序位置对应</span>':'<span class="badge amber" id="taskSceneDataBadge">02 / 仿真作业 · 演示</span>', false)}</aside></div></section><div class="grid-main task-configuration" id="taskConfiguration"><div>${panel(
+      `<details class="task-drawer task-equipment-drawer" id="taskEquipmentDrawer" ${taskPanels.equipment ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("tasks")}</span><span><b>设备配置与项目示意</b><small>检测车 · 雷达 · 影像 · 定位 · 边缘终端 · 安全保障</small></span><span class="badge mint">6 类设备</span></summary><div class="task-drawer-body">${equipmentPanel()}</div></details><section class="task-workspace" aria-label="现场视频与仿真左右对照"><div class="task-workspace-head"><div><span class="task-workspace-kicker">LIVE VIDEO / DIGITAL TWIN</span><h2>现场与仿真 · 同屏对照</h2><p>${escape(t.name)}<span> / </span>${mile(t.start)} — ${mile(t.end)}</p></div><div class="task-workspace-actions">${btn("冻结视频并标记", "task-capture-video", "primary", 'disabled id="taskCaptureVideo"')}${btn("疑似位置与对应", "task-evidence", "subtle")}${btn("作业参数", "task-parameters", "subtle")}</div></div><div id="taskPositionReviewMount"></div><div class="task-comparison-grid" id="taskComparison"><div class="task-video-pane"><div id="liveMonitorMount"></div><details class="task-drawer task-evidence-drawer" id="taskEvidenceDrawer" ${taskPanels.evidence || state.pendingVideoEvidence ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("defects")}</span><span><b>疑似位置与对应</b><small>冻结原帧、记录疑似位置与顺序、查看对应证据</small></span><span class="badge mint" id="taskEvidenceCount">${evidenceTotal} 条记录</span></summary><div class="task-drawer-body"><div id="evidenceMount"></div></div></details></div><aside class="task-simulation-pane" aria-label="对应仿真作业场景">${panel("检测车作业场景 · 仿真演示", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, evidenceActive()?'<span class="badge mint" id="taskSceneDataBadge">02 / 同源疑似点 · 顺序位置对应</span>':'<span class="badge amber" id="taskSceneDataBadge">02 / 仿真作业 · 演示</span>', false)}</aside></div></section><div class="grid-main task-configuration" id="taskConfiguration"><div>${panel(
         "任务列表",
         `<div class="table-wrap"><table><thead><tr><th>任务</th><th>检测范围</th><th>速度</th><th>进度</th><th>状态</th><th>操作</th></tr></thead><tbody>${batchTasks()
           .map(
@@ -749,13 +770,17 @@
           btn("进入影像三维复核", "go-image-review", "subtle"),
       ) +
       moduleTabs() +
+      panel(
+        "当前影像检测算法",
+        `<div id="currentImageAlgorithm"><div class="grid-2"><div><h3>crack-seg U-Net · 裂缝分割</h3><p class="muted">输入为原始影像帧，输出为裂缝掩码与候选观测。由 algorithm/defect_detect.py 独立运行；现有候选可继续在隧道影像三维复核中查看。</p></div><div>${note("当前检测范围为裂缝候选，须人工复核。视频接入不会自动启动 Python 算法，算法结果尚未自动写入工作台病害记录。", "info")}</div></div><div class="actions">${btn("查看影像检测与三维复核", "go-image-review", "primary")}<a class="btn subtle" href="algorithm/README.md" target="_blank" rel="noopener">查看当前算法说明 ↗</a></div></div>`,
+        '<span class="badge mint">独立影像算法</span>',
+      ) +
       radarControls() +
       `<div class="flow">${[
         ["原始数据", r.source === "import" ? radarTransportLabel(r) + " · 外部快照" : "内置示意", "已加载"],
         ["数值预处理", "减背景 + 时间增益", ready ? "已完成" : "可运行"],
         ["RCAN 杂波抑制", "残差通道注意网络", "待接入"],
         ["RTM 逆时偏移", "全波方程成像接口", "待接入"],
-        ["病害识别与量化", "TunGPR / T-GPRMask 候选", "待接入"],
       ]
         .map(
           (s, i) =>
@@ -763,7 +788,7 @@
         )
         .join(
           "",
-        )}</div><div class="grid-3">${panel("原始输入", `<div class="radar-wrap"><canvas id="rawRadar" aria-label="原始雷达对比图"></canvas></div><div class="radar-caption">${escape(r.name)} · ${r.rows} × ${r.cols}</div>`)}${panel("实际数值预处理", ready ? `<div class="radar-wrap"><canvas id="processedRadar" aria-label="数值预处理对比图"></canvas></div><div class="radar-caption">${fmt(p.durationMs, 2)} ms · ${p.version}</div>` : '<div class="empty"><b>等待运行</b>对当前输入矩阵减去逐行均值，再施加线性时间增益。</div>')}${panel("RTM 成像输出", '<div class="empty"><b>尚未连接 RTM 求解器</b>连接经验证的求解器后才显示成像结果。</div>' + btn("查看算法接入契约", "adapter", "small"))}</div><div class="grid-2">${panel("处理参数", `<div class="form-grid">${field("线性时间增益 g", "gain", p.gain ?? 1, 0, 20, 0.1)}<label class="field">背景去除<span><input type="checkbox" id="background" ${p.background === false ? "" : "checked"}> 逐采样点减去道均值</span></label><label class="field">候选识别模型<select id="modelChoice"><option ${p.model === "TunGPR" ? "selected" : ""}>TunGPR</option><option ${p.model === "T-GPRMask" ? "selected" : ""}>T-GPRMask</option></select><small>只保存接口选择，不触发真实推理</small></label><label class="field">预处理版本<input value="background-gain-1.0" readonly></label></div><p class="code">y[r,c] = (x[r,c] − mean(x[r,:])) × (1 + g·r/(N−1))</p>${note("真实预处理不会自动生成病害。16 条病害是沿用的演示台账，RCAN、RTM 和候选识别均尚未接入。", "warning")}<div class="actions">${btn("运行 / 重试", "run-preprocess", "primary")}${btn("取消处理", "cancel-processing", "subtle")}${btn("检查未接入模型", "try-model", "small")}</div>`)}${panel("RTM 参数与运行记录", `<div class="form-grid">${field("相对介电常数 εr", "rtmEpsilon", p.epsilon || 6, 1, 100, 0.1)}${field("网格步长 / m", "rtmDx", p.dx || 0.01, 0.0001, 1, 0.001)}${field("时间步长 / ns", "rtmDt", p.dt || 0.02, 0.0001, 10, 0.001)}<label class="field">边界条件<select id="rtmBoundary"><option>CPML（待求解器实现）</option></select></label></div><div class="actions">${btn("保存并校核参数", "save-rtm", "small")}</div><p class="muted" style="font-size:11px">二维等距网格参考稳定性诊断：Δt ≤ Δx /(v√2)，v=0.299792458/√εr m/ns。实际限制取决于离散格式与求解器。</p><div class="note info">状态：${escape(p.status || "idle")}<br>输入：${escape(p.inputName || "未运行")}<br>处理时间：${escape(p.finishedAt || "—")}<br>最近提示：${escape(p.message || "等待输入")}</div>`)}</div>`
+        )}</div><div class="grid-3">${panel("原始输入", `<div class="radar-wrap"><canvas id="rawRadar" aria-label="原始雷达对比图"></canvas></div><div class="radar-caption">${escape(r.name)} · ${r.rows} × ${r.cols}</div>`)}${panel("实际数值预处理", ready ? `<div class="radar-wrap"><canvas id="processedRadar" aria-label="数值预处理对比图"></canvas></div><div class="radar-caption">${fmt(p.durationMs, 2)} ms · ${p.version}</div>` : '<div class="empty"><b>等待运行</b>对当前输入矩阵减去逐行均值，再施加线性时间增益。</div>')}${panel("RTM 成像输出", '<div class="empty"><b>尚未连接 RTM 求解器</b>连接经验证的求解器后才显示成像结果。</div>' + btn("查看算法接入契约", "adapter", "small"))}</div><div class="grid-2">${panel("处理参数", `<div class="form-grid">${field("线性时间增益 g", "gain", p.gain ?? 1, 0, 20, 0.1)}<label class="field">背景去除<span><input type="checkbox" id="background" ${p.background === false ? "" : "checked"}> 逐采样点减去道均值</span></label><label class="field">预处理版本<input value="background-gain-1.0" readonly></label></div><p class="code">y[r,c] = (x[r,c] − mean(x[r,:])) × (1 + g·r/(N−1))</p>${note("真实预处理不会自动生成病害。16 条病害是沿用的演示台账；RCAN 与 RTM 雷达接口尚未接入。影像裂缝检测由上方独立算法流程完成。", "warning")}<div class="actions">${btn("运行 / 重试", "run-preprocess", "primary")}${btn("取消处理", "cancel-processing", "subtle")}${btn("检查 RTM 接口", "try-model", "small")}</div>`)}${panel("RTM 参数与运行记录", `<div class="form-grid">${field("相对介电常数 εr", "rtmEpsilon", p.epsilon || 6, 1, 100, 0.1)}${field("网格步长 / m", "rtmDx", p.dx || 0.01, 0.0001, 1, 0.001)}${field("时间步长 / ns", "rtmDt", p.dt || 0.02, 0.0001, 10, 0.001)}<label class="field">边界条件<select id="rtmBoundary"><option>CPML（待求解器实现）</option></select></label></div><div class="actions">${btn("保存并校核参数", "save-rtm", "small")}</div><p class="muted" style="font-size:11px">二维等距网格参考稳定性诊断：Δt ≤ Δx /(v√2)，v=0.299792458/√εr m/ns。实际限制取决于离散格式与求解器。</p><div class="note info">状态：${escape(p.status || "idle")}<br>输入：${escape(p.inputName || "未运行")}<br>处理时间：${escape(p.finishedAt || "—")}<br>最近提示：${escape(p.message || "等待输入")}</div>`)}</div>`
     );
   }
   function defectsPage() {
@@ -780,7 +805,7 @@
     );
   }
   function twinPage() {
-    if (evidenceActive()) return heading("三维数字孪生", "现场病害与视频 / 雷达共用编号、类型、先后顺序和位置；形状为定位标记，非重建模型。", "03 / 对应计划第 3 部分", btn("返回影像三维复核", "go-image-review", "subtle")) + moduleTabs() + '<div id="evidenceMount"></div>' + `<div class="grid-main evidence-twin"><div>${panel("现场病害空间对应", scene(true,true), '<span class="badge mint">当前任务现场标注 · 未作风险鉴定</span>',false)}${panel("现场病害环向展开",'<canvas id="evidenceUnfold" aria-label="现场病害里程与环向位置"></canvas><p class="muted">点选标记可按同一坐标定位并对齐检测车。</p>')}</div><aside>${panel("所选现场病害环位",'<canvas id="evidenceSection" aria-label="现场病害横断面位置"></canvas>')}${panel("对应规则",'<p>录像时间进度对应任务区间，画面横向对应指定环位；雷达道序对应里程，采样序对应相对深度。人工位置与已校核测线标定也可填写。</p><p class="muted">相对映射保持先后順序，不等于实测定位。标注不自动改变演示 SHI、预警或历史派生值。切回“原有演示台账”可使用原历史评估。</p>')}</aside></div>`;
+    if (evidenceActive()) return heading("三维数字孪生", "现场疑似点与视频 / 雷达共用编号、先后顺序和位置；未识别点使用统一标记，已有分类保留。", "03 / 对应计划第 3 部分", btn("返回影像三维复核", "go-image-review", "subtle")) + moduleTabs() + '<div id="evidenceMount"></div>' + `<div class="grid-main evidence-twin"><div>${panel("现场疑似位置空间对应", scene(true,true), '<span class="badge mint">当前任务现场标注 · 未作风险鉴定</span>',false)}${panel("现场疑似位置环向展开",'<canvas id="evidenceUnfold" aria-label="现场病害里程与环向位置"></canvas><p class="muted">点选标记可按同一坐标定位并对齐检测车。</p>')}</div><aside>${panel("所选现场疑似位置环位",'<canvas id="evidenceSection" aria-label="现场病害横断面位置"></canvas>')}${panel("对应规则",'<p>录像时间进度对应任务区间，画面横向对应指定环位；雷达道序对应里程，采样序对应相对深度。人工位置与已校核测线标定也可填写。</p><p class="muted">相对映射保持先后順序，不等于实测定位。标注不自动改变演示 SHI、预警或历史派生值。切回“原有演示台账”可使用原历史评估。</p>')}</aside></div>`;
     return (
       heading(
         "三维数字孪生",
@@ -934,7 +959,7 @@
       Object.entries(s.simulation)
         .map(([key, val]) => simulationSummary(key, val))
         .join("<br>") || "未保存仿真工况。"
-    }</p><h3>七、建议与局限性</h3><p>优先专项复核高风险对象，结合钻孔、其他无损检测与运营条件确认治理方案。停运、限速等重大措施须专业复核。复检证据应记录后再关闭预警，不通过点击操作改变病害真实状态。</p><p>${s.limitations.map(escape).join("<br>")}</p><p>RCAN、RTM、TunGPR / T-GPRMask、真实车辆硬件及经验证有限元尚未接入；结构响应只提供简化圆环参数敏感性，方案预算与降险为演示假设。</p></article>`;
+    }</p><h3>七、建议与局限性</h3><p>优先专项复核高风险对象，结合钻孔、其他无损检测与运营条件确认治理方案。停运、限速等重大措施须专业复核。复检证据应记录后再关闭预警，不通过点击操作改变病害真实状态。</p><p>${s.limitations.map(escape).join("<br>")}</p><p>RCAN、RTM 雷达接口、真实车辆硬件及经验证有限元尚未接入；当前影像检测采用独立的 crack-seg U-Net 裂缝分割流程，尚未自动写入工作台病害记录。结构响应只提供简化圆环参数敏感性，方案预算与降险为演示假设。</p></article>`;
   }
   function reportsPage() {
     const snap = C.exportSnapshot(state);
@@ -1307,7 +1332,7 @@
         openVideo:(anchor,id)=>{state.evidenceSelectedId=id;window.TunnelEvidenceCore.setSource(state,evidenceContext(),anchor.sourceId);state.pendingVideoEvidence=anchor;window.TunnelEvidenceCore.setMode(state,evidenceContext(),"evidence");if(route==="tasks")render();else location.hash="tasks";},
         openRadar:(anchor,id)=>{const index=state.radars.findIndex(r=>r.id===anchor.archiveId&&r.batchId===state.batch&&r.taskId===task().id);if(index<0)throw Error("原始雷达快照不存在，请保留原矩阵");state.evidenceSelectedId=id;window.TunnelEvidenceCore.setSource(state,evidenceContext(),anchor.sourceId);selectedRadar=index;radarMode="import";state.pendingRadarEvidence=anchor;window.TunnelEvidenceCore.setMode(state,evidenceContext(),"evidence");if(route==="radar")render();else location.hash="radar";},
         followChanged:on=>{if(on&&taskRunning)toggleTask();},
-        follow:(ratio,id)=>{if(taskRunning){clearInterval(timer);timer=null;taskRunning=false;}const t=task();t.progress=Math.max(0,Math.min(1,ratio));t.status="paused";if(id&&state.evidenceSelectedId!==id){state.evidenceSelectedId=id;syncScene();window.TunnelEvidenceLink.refresh();}else syncTask();if($("#taskPercent"))$("#taskPercent").textContent=fmt(t.progress*100)+"%";if($("#taskBar"))$("#taskBar").style.width=t.progress*100+"%";if($("#taskDistance"))$("#taskDistance").textContent="相对对齐位置 "+fmt(t.progress*(t.end-t.start))+" m";if($("#taskStatus"))$("#taskStatus").textContent=t.name+" · 录像进度对应";},
+        follow:(ratio,id)=>{if(taskRunning){clearInterval(timer);timer=null;taskRunning=false;}const t=task();t.progress=Math.max(0,Math.min(1,ratio));t.status="paused";if(id&&state.evidenceSelectedId!==id){state.evidenceSelectedId=id;syncScene();window.TunnelEvidenceLink.refresh();}else syncTask();if($("#taskPercent"))$("#taskPercent").textContent=fmt(t.progress*100)+"%";if($("#taskBar"))$("#taskBar").style.width=t.progress*100+"%";if($("#taskDistance"))$("#taskDistance").textContent="相对对齐位置 "+fmt(t.progress*(t.end-t.start))+" m";if($("#taskStatus"))$("#taskStatus").textContent=t.name+" · 录像进度对应";refreshTaskRow();},
       });
       drawCanvases();
     } catch (e) {
@@ -1561,7 +1586,7 @@
           durationMs: duration,
           version: "background-gain-1.0",
           finishedAt: new Date().toISOString(),
-          message: "数值预处理完成；模型识别未接入",
+          message: "数值预处理完成；影像裂缝检测为独立流程",
         };
         log("完成数值预处理 " + r.name);
         if (route === "processing") render();
@@ -1832,7 +1857,7 @@
     },
     "try-model": async () => {
       const r = radarData(),
-        name = state.processing.model || "TunGPR",
+        name = "RTM",
         batchId = state.batch,
         token = ++processingToken;
       modelController = new AbortController();
@@ -1879,7 +1904,7 @@
     },
     adapter: () =>
       showModal(
-        `<h2>真实算法接入契约</h2><p>本地演示不发送任何网络请求。候选模型名称来自计划书，接入前需核实原始论文、代码、许可证、权重及适用数据。</p><div class="note info">输入：项目 / 批次 / 测线编号、矩阵、单位和标定；模型名称、版本、参数。<br>输出：状态、数据来源、耗时、证据、坐标 / 单位、置信度、量化依据和失败信息。<br>RTM：介电 / 波速、网格、时间步长、边界条件、稳定性与收敛验证。</div><p>详细说明：<a href="真实算法与数据接入说明.md" target="_blank">真实算法与数据接入说明 ↗</a></p>`,
+        `<h2>真实算法接入契约</h2><p>此处说明 RCAN / RTM 雷达处理接口，不会调用影像检测。当前影像检测采用 algorithm/defect_detect.py 的 crack-seg U-Net 独立流程；算法自动写入病害记录暂未接通。接入雷达后端前需核实代码、许可证、权重或求解器以及适用数据。</p><div class="note info">输入：项目 / 批次 / 测线编号、矩阵、单位和标定；模型名称、版本、参数。<br>输出：状态、数据来源、耗时、证据、坐标 / 单位、置信度、量化依据和失败信息。<br>RTM：介电 / 波速、网格、时间步长、边界条件、稳定性与收敛验证。</div><p>详细说明：<a href="真实算法与数据接入说明.md" target="_blank">真实算法与数据接入说明 ↗</a></p>`,
       ),
     "save-rtm": () => {
       const epsilon = Number($("#rtmEpsilon").value),
@@ -2163,10 +2188,6 @@
         }
       }
 
-      if (el.id === "modelChoice") {
-        state.processing.model = el.value;
-        save();
-      }
     } catch (err) {
       toast(err.message, true);
     }

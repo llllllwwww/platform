@@ -118,9 +118,12 @@ fs.mkdirSync(out, { recursive: true });
   pass("数值预处理运行并显示对比矩阵", {
     version: (await snap()).processing.version,
   });
+  assert.equal(await page.locator("#modelChoice").count(), 0);
+  assert.match(await page.locator("#currentImageAlgorithm").textContent(), /crack-seg U-Net/);
   await page.locator('[data-action="try-model"]').click();
   assert.equal((await snap()).processing.status, "failed");
-  pass("未接入模型明确失败，没有伪造识别结果");
+  assert.match((await snap()).processing.message, /RTM.*未接入/);
+  pass("旧识别选择已移除，当前影像算法明确，RTM 未连接不会伪造结果");
   await go("defects");
   await page.locator('[data-action="select"][data-id="D-003"]').click();
   await page.waitForURL(/#twin/);
@@ -306,6 +309,37 @@ fs.mkdirSync(out, { recursive: true });
     });
     pass("响应布局无整页横向溢出 " + width);
   }
+  // 验证升级旧缓存时只清理已移除的识别选择，保留真实输入和已有业务状态。
+  const legacyCache = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((name) => {
+      try { return JSON.parse(localStorage.getItem(name)).schemaVersion === 2; }
+      catch { return false; }
+    });
+    if (!key) throw Error("缺少可升级的工作台缓存");
+    const saved = JSON.parse(localStorage.getItem(key)),
+      preserved = Object.fromEntries(["defects", "tasks", "radars", "evidenceRecords", "scenePrefs", "reviewsByBatch"]
+        .filter((name) => Object.prototype.hasOwnProperty.call(saved, name))
+        .map((name) => [name, saved[name]]));
+    saved.processing.model = "retired-selection";
+    saved.processing.status = "failed";
+    saved.processing.message = "算法 retired-selection 未接入";
+    saved.processingByBatch = saved.processingByBatch || {};
+    saved.processingByBatch.B202607 = { status: "failed", model: "retired-selection", message: "算法 retired-selection 未接入", version: "keep-version", gain: 3.5 };
+    localStorage.setItem(key, JSON.stringify(saved));
+    return { key, preserved };
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await go("processing");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#currentImageAlgorithm");
+  const upgradedCache = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), legacyCache.key);
+  assert.equal(Object.hasOwn(upgradedCache.processing, "model"), false);
+  assert.equal(Object.hasOwn(upgradedCache.processingByBatch.B202607, "model"), false);
+  assert.equal(upgradedCache.processingByBatch.B202607.version, "keep-version");
+  assert.equal(upgradedCache.processingByBatch.B202607.gain, 3.5);
+  assert.equal((await page.locator("body").textContent()).includes("retired-selection"), false);
+  for (const [name, value] of Object.entries(legacyCache.preserved)) assert.deepEqual(upgradedCache[name], value, "缓存升级改变了 " + name);
+  pass("旧识别选择跨批次清理，病害、任务、矩阵、对应记录和场景设置保持完整");
   assert.equal(errors.length, 0, errors.join("\n"));
   pass("全流程无页面异常或控制台错误");
   fs.writeFileSync(

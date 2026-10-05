@@ -10,7 +10,7 @@
   else root.TunnelAdapters = api;
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  var DEFAULT_NAMES = ['RCAN', 'RTM', 'TunGPR', 'T-GPRMask'];
+  var DEFAULT_NAMES = ['RCAN', 'RTM'];
   var registry = new Map(), cache = new Map(), epoch = 0, CACHE_LIMIT = 8;
 
   function requiredText(value, field) {

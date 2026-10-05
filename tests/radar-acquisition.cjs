@@ -54,7 +54,7 @@ const out=path.resolve(__dirname,'output');fs.mkdirSync(out,{recursive:true});
       const pending=page.waitForEvent('download');await page.locator('[data-radar-action=json]').click();const d=await pending;
       return JSON.parse(fs.readFileSync(await d.path(),'utf8'));
     };
-    assert.deepEqual(await page.locator('.panel-head h2').allTextContents(),['雷达采集 · 外部数据','现场病害 · 视频 / 雷达 ↔ 仿真 ↔ 孪生','雷达信号 · 仿真演示']);
+    assert.deepEqual(await page.locator('.panel-head h2').allTextContents(),['雷达采集 · 外部数据','现场疑似位置 · 视频 / 雷达 ↔ 仿真 ↔ 孪生','雷达信号 · 仿真演示']);
     assert.equal(await page.locator('#radarInputEmpty').isVisible(),true);
     assert.equal(await page.locator('#rawRadar').isVisible(),true);assert.equal(await importedCount(),0);
     pass('默认外部区为空，仿真示例独立保留，不伪造接入成功');

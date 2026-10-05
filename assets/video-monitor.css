@@ -45,3 +45,8 @@
 @media (max-width: 1100px) { .monitor-network-form { grid-template-columns: repeat(2,minmax(0,1fr)); } .monitor-url-field { grid-column: 1 / -1; } }
 @media (max-width: 767px) { .monitor-screen { min-height: 195px; } .monitor-network-form, .monitor-metadata { grid-template-columns: minmax(0,1fr); } .monitor-overlay { flex-wrap: wrap; align-items: flex-start; } #monitorSourceName { max-width: 90%; } .monitor-empty { padding: 42px 14px; } .monitor-empty b { font-size: 12px; } .monitor-empty span { font-size: 10px; } }
 @media (prefers-reduced-motion: reduce) { .monitor-empty.loading svg { animation: none; } }
+
+/* 现场采集的编号定位点：不拦截原生播放 / 全屏控件。 */
+.monitor-evidence-points { position:absolute; inset:0; pointer-events:none; }
+.monitor-evidence-point { position:absolute; display:grid; place-items:center; width:24px; height:24px; border:2px solid #56d9b1; border-radius:50%; transform:translate(-50%,-50%); background:rgba(11,16,24,.88); color:#e8f0f7; font:600 12px/1 "JetBrains Mono",monospace; font-style:normal; box-shadow:0 0 0 3px rgba(11,16,24,.5); }
+.evidence-capture-note b { padding:10px 0; color:#56d9b1; font-size:12px; }

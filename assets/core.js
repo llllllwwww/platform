@@ -60,7 +60,7 @@
       selectedId:'D-001', filters:{type:'all',risk:'all',review:'all',minConfidence:0,start:3128,end:3176}, alpha:.6,
       ahp:[[1,4/3,2,4],[3/4,1,1.5,3],[.5,2/3,1,2],[.25,1/3,.5,1]], thresholds:[40,60,80], severeDiameter:.3,
       defects:defs, reviewsByBatch:{}, tasks:[{id:'T-001',batch:'B202609',name:'首轮衬砌普查',start:3128,end:3176,speed:.6,spacing:.1,status:'ready',progress:0,source:'演示任务',lineId:'L-01',scanStart:-90,scanEnd:90}],
-      alerts:[], logs:[], radars:[], maintenance:[], processing:{status:'idle',algorithmVersion:'未接入 RCAN / RTM / 识别模型'}, simulation:{},
+      alerts:[], logs:[], radars:[], maintenance:[], processing:{status:'idle',algorithmVersion:'雷达 RCAN / RTM 待接入；影像检测独立运行'}, simulation:{},
       createdAt:'2026-09-28T00:00:00.000Z', dataMode:'demo'
     };
   }
@@ -397,9 +397,9 @@
           radarData:(state.radars||[]).length-scopedRadars.length,maintenance:(state.maintenance||[]).length-scopedMaintenance.length},
         simulation:'仅保留当前批次仿真；无批次外部分析以项目全局参考单独标注，不视为本批次结果。',globalSimulationKeys:globalSimulationKeys,excludedSimulationKeys:excludedSimulationKeys},
       evidenceRecords:clone((state.evidenceRecords||[]).filter(function(r){return r.batchId===state.batch;})),
-      evidenceBoundary:'现场类型为人工标注；对应位置保留相对映射 / 标定依据，未自动纳入演示 SHI。',
+      evidenceBoundary:'视频采集只记录疑似位置，类型待第二阶段识别；保留旧分类与相对映射 / 标定依据，未自动纳入演示 SHI。',
       coordinateDefinition:'X=里程−项目起点；Y=(内半径+径向埋深)cos角度；Z=(内半径+径向埋深)sin角度；环向 0° 拱顶，90° 右墙，单位 m；病害定位于管片环中心。',
-      sources:['原平台 16 条演示台账；历史批次为尺寸比例派生','外部 CSV / JSON / 网关帧只解析数值与元数据，不自动产生病害诊断','RCAN / RTM / 候选识别模型尚未接入，真实预处理为减背景与线性时间增益'],
+      sources:['原平台 16 条演示台账；历史批次为尺寸比例派生','外部 CSV / JSON / 网关帧只解析数值与元数据，不自动产生病害诊断','雷达 RCAN / RTM 尚未接入，真实预处理为减背景与线性时间增益','影像检测采用独立 crack-seg U-Net 裂缝分割流程，结果未自动写入工作台台账'],
       limitations:['演示评估不构成正式工程鉴定。','列表筛选不改变全局评估；filteredAssessment 单列当前筛选范围的诊断性分数。','置信度非诊断可靠性；内置证据与仿真信号均为演示。','严重病害直径规则适用于全部演示候选类型，实际规则应由专业人员按病害类别审定。']};
   }
   return {VERSION:VERSION,TYPES:TYPES,RISKS:RISKS,VEHICLE:VEHICLE,LIMITS:LIMITS,createState:createState,getDefects:getDefects,setReview:setReview,

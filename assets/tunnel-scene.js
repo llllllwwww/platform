@@ -109,6 +109,7 @@ var TYPE = {
 TYPE.seepage={name:'表面渗水',color:'#5bcce9',shape:'cir',w:.3,adv:'待专业复核'};
 TYPE.spalling={name:'剥落 / 破损',color:'#f09b72',shape:'cir',w:.3,adv:'待专业复核'};
 TYPE.corrosion={name:'锈蚀 / 腐蚀',color:'#d89563',shape:'cir',w:.3,adv:'待专业复核'};
+TYPE.suspected={name:'疑似点',color:'#56d9b1',shape:'cir',w:.3,adv:'待第二阶段识别与专业复核'};
 var LEVEL = {
   unrated:{name:'现场标注 / 未评估',color:'#56d9b1',text:'证据对应；不代表自动识别或工程分级'},
   I:   { name:'I 严重', color:'#ff3b3b', text:'立即专项检测，限期注浆回填' },
@@ -615,7 +616,10 @@ function buildDefect(d){
 
     var core, scale = new THREE.Vector3(1, 1, 1);
 
-    if (d.T === 'void' || d.T === 'water' || d.T === 'debond'){
+    if (d.T === 'suspected'){
+      // 固定大小的中性定位点；球体不代表病害形状或测量尺寸。
+      core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), new THREE.MeshStandardMaterial({color:t.color,emissive:new THREE.Color(t.color),emissiveIntensity:0.7,roughness:0.6}));
+    } else if (d.T === 'void' || d.T === 'water' || d.T === 'debond'){
       var R = Math.max(0.055, (d.d || 0.2) / 2);
       core = new THREE.Mesh(
         new THREE.SphereGeometry(R, 22, 16),
@@ -1864,6 +1868,7 @@ function select(dm){
 
 function stepDefect(dir){
   var vis = defectMeshes.filter(function(dm){ return dm.group.visible; });
+  if (bridgeEvidenceMode) vis.sort(function(a,b){return a.def._sequence-b.def._sequence;});
   if (!vis.length) return;
   var i = state.sel ? vis.indexOf(state.sel) : -1;
   i = (i + dir + vis.length) % vis.length;
@@ -2674,7 +2679,7 @@ function removeEvidenceMesh(dm){gDefect.remove(dm.group);dm.lbl.remove();dm.grou
 function updateEvidenceMeshes(defs){
  defectMeshes.slice().filter(function(dm){return dm.def.markerOnly;}).forEach(function(dm){var d=defs.find(function(d){return d.id===dm.def.id;});if(!d||d.type!==dm.def.T)removeEvidenceMesh(dm);});
  defs.filter(function(d){return d.markerOnly&&!defectMeshes.some(function(dm){return dm.def.id===d.id;});}).forEach(function(d){
-  var raw={id:d.id,T:d.type,ring:d.ring,az:d.angle,h:d.depth,d:.12,Lm:.35,S:0,C:NaN,L:'unrated',_score:NaN,markerOnly:true,_typeName:d.typeName,img:'现场证据对应',note:'人工标注，形状仅为定位标记',adv:'待专业复核'};
+  var raw={id:d.id,T:d.type,ring:d.ring,az:d.angle,h:d.depth,d:.12,Lm:.35,S:0,C:NaN,L:'unrated',_score:NaN,markerOnly:true,_sequence:d.sequence,_typeName:d.typeName,img:'现场证据对应',note:'人工标注，形状仅为定位标记',adv:'待专业复核'};
   DEFECTS.push(raw);buildDefect(raw);var dm=defectMeshes[defectMeshes.length-1];bridgeOriginal[d.id]={diameter:.12,scale:dm.mesh.scale.clone(),haloScale:dm.haloScale0.clone()};
  });
 }
@@ -2689,10 +2694,10 @@ window.addEventListener('message',function(event){
     dm.group.children.forEach(function(ch){if(ch.isLine&&!ch.isLineSegments&&ch.geometry.attributes.position){var ar=ch.geometry.attributes.position;for(var i=0;i<ar.count;i++)ar.setXYZ(i,ar.getX(i)+delta.x,ar.getY(i)+delta.y,ar.getZ(i)+delta.z);ar.needsUpdate=true;ch.geometry.computeBoundingSphere();}else ch.position.add(delta);});
     dm.pos.copy(target);dm.out.add(delta);
     var base=bridgeOriginal[d.id],ratio=d.diameter/base.diameter;dm.mesh.scale.copy(base.scale).multiplyScalar(ratio);dm.haloScale0.copy(base.haloScale).multiplyScalar(ratio);
-    dm.def.ring=d.ring;dm.def.az=d.angle;dm.def.L=d.risk;dm.def._score=d.score;dm.def.d=d.diameter;dm.def.h=d.depth;dm.def.Lm=d.length;dm.def.S=d.area;dm.def.C=d.markerOnly?NaN:d.confidence;dm.def.markerOnly=!!d.markerOnly;dm.def._typeName=d.typeName;dm.def._mileage=d.mileage;dm.def._sceneX=d.position.x;
+    dm.def.ring=d.ring;dm.def.az=d.angle;dm.def.L=d.risk;dm.def._score=d.score;dm.def.d=d.diameter;dm.def.h=d.depth;dm.def.Lm=d.length;dm.def.S=d.area;dm.def.C=d.markerOnly?NaN:d.confidence;dm.def.markerOnly=!!d.markerOnly;dm.def._typeName=d.typeName;dm.def._sequence=d.sequence;dm.def._mileage=d.mileage;dm.def._sceneX=d.position.x;
     if(d.markerOnly){dm.def.d=NaN;dm.def.Lm=NaN;dm.def.S=NaN;dm.def._score=NaN;}
     var col=d.markerOnly?TYPE[d.type].color:bridgeRiskColors[d.risk];dm.mesh.material.color.set(col);if(dm.mesh.material.emissive)dm.mesh.material.emissive.set(col);dm.halo.material.color.set(col);
-    dm.lbl.textContent=d.id+' · '+(d.typeName||TYPE[dm.def.T].name);dm.lbl.style.color=col;dm.lbl.className='lbl lv-'+d.risk;
+    dm.lbl.textContent=(d.markerOnly?d.sequence+'. ':'')+d.id+' · '+(d.typeName||TYPE[dm.def.T].name);dm.lbl.style.color=col;dm.lbl.className='lbl lv-'+d.risk;
    });
    rebuildRisk(defs.filter(function(d){return !d.markerOnly;}));if(bridgeEvidenceMode)riskGroup.visible=false;var selected=defectMeshes.find(function(dm){return dm.def.id===msg.selectedId&&dm.group.visible;});select(selected||null);SHI=bridgeEvidenceMode?NaN:(Number(msg.shi)||0);
   }
@@ -2726,7 +2731,7 @@ if(embedded){
  focusDefect=bridgeFocus;
  window.addEventListener('keydown',function(e){if(e.key==='p'||e.key==='P'){e.preventDefault();e.stopImmediatePropagation();hostSend('toggle-task');}},true);
  // 只读场景状态供集成验收使用；不提供任意执行接口。
- window.SLZJScene={snapshot:function(){return {firstPerson:fp.on,freeFly:fly.on,autoRotate:orbit.autoRotate,layers:{stars:bgStars&&bgStars.visible,city:bgCity.visible,ground:gGround.visible,grout:gGrout.visible,rebar:gRebar.visible,profile:gProfile.visible,car:gCar.visible,ray:gRay.visible},backgroundImage:!!(scene.background&&scene.background.isTexture),selectedId:state.sel&&state.sel.def.id,carX:gCar.userData.car.position.x,playing:!carPaused,visibleIds:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){return dm.def.id;}),positions:defectMeshes.map(function(dm){return {id:dm.def.id,type:dm.def.T,typeName:dm.def._typeName||TYPE[dm.def.T].name,markerOnly:!!dm.def.markerOnly,x:dm.pos.x,y:dm.pos.y,z:dm.pos.z};}),projected:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){var p=dm.mesh.getWorldPosition(new THREE.Vector3()).project(camera);return {id:dm.def.id,x:(p.x*.5+.5)*window.innerWidth,y:(-p.y*.5+.5)*window.innerHeight,z:p.z};}),obstacleVisible:obstacleMesh.visible,opacity:shellMat.uniforms.uOpacity.value};}};
+ window.SLZJScene={snapshot:function(){return {firstPerson:fp.on,freeFly:fly.on,autoRotate:orbit.autoRotate,layers:{stars:bgStars&&bgStars.visible,city:bgCity.visible,ground:gGround.visible,grout:gGrout.visible,rebar:gRebar.visible,profile:gProfile.visible,car:gCar.visible,ray:gRay.visible},backgroundImage:!!(scene.background&&scene.background.isTexture),selectedId:state.sel&&state.sel.def.id,carX:gCar.userData.car.position.x,playing:!carPaused,visibleIds:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){return dm.def.id;}),positions:defectMeshes.map(function(dm){return {id:dm.def.id,type:dm.def.T,typeName:dm.def._typeName||TYPE[dm.def.T].name,markerOnly:!!dm.def.markerOnly,sequence:dm.def._sequence||null,x:dm.pos.x,y:dm.pos.y,z:dm.pos.z};}),projected:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){var p=dm.mesh.getWorldPosition(new THREE.Vector3()).project(camera);return {id:dm.def.id,x:(p.x*.5+.5)*window.innerWidth,y:(-p.y*.5+.5)*window.innerHeight,z:p.z};}),obstacleVisible:obstacleMesh.visible,opacity:shellMat.uniforms.uOpacity.value};}};
  setTimeout(function(){hostSend('ready');},50);
 }
 // SLZJ_BRIDGE_END

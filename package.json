@@ -11,7 +11,10 @@
     "test:video": "node tests/video-monitor.cjs",
     "test:radar": "node tests/radar-acquisition.cjs",
     "test:evidence": "node tests/evidence-correspondence.cjs",
-    "test:layout": "node tests/task-layout.cjs"
+    "test:layout": "node tests/task-layout.cjs",
+    "test:positions": "node tests/video-position-ui.cjs",
+    "test:follow": "node tests/video-follow.cjs",
+    "test:review": "node tests/position-review.cjs"
   },
   "devDependencies": {
     "playwright": "1.63.0"

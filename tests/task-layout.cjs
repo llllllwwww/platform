@@ -2,7 +2,9 @@
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
 const out = path.join(__dirname, 'output');
-const videoFile = path.join(out, 'public-videos', 'cracks.mp4');
+const fixture = require('./tunnel-video-cases.json').find(c=>c.uiExample);
+const videoFile = path.join(out, 'public-videos', fixture.playbackFile||fixture.file);
+const captureTime=fixture.points[1].time;
 if (!fs.existsSync(videoFile)) throw new Error('请先运行 python tests/download_public_videos.py 准备公开视频。');
 fs.mkdirSync(out, {recursive:true});
 const near = (a,b,eps=1) => assert(Math.abs(a-b)<=eps,`${a} 与 ${b} 相差超过 ${eps}`);
@@ -44,8 +46,8 @@ const near = (a,b,eps=1) => assert(Math.abs(a-b)<=eps,`${a} 与 ${b} 相差超�
     await page.setViewportSize({width:1440,height:1000});
     await page.locator('#monitorFile').setInputFiles(videoFile);
     await page.waitForFunction(()=>TunnelVideoMonitor.evidenceIdentity().ready&&TunnelVideoMonitor.evidenceIdentity().sourceId?.startsWith('VF-'));
-    await page.locator('#monitorVideo').evaluate(v=>{v.pause();v.currentTime=7;});
-    await page.waitForFunction(()=>{const v=document.querySelector('#monitorVideo');return !v.seeking&&Math.abs(v.currentTime-7)<.02;});
+    await page.locator('#monitorVideo').evaluate(v=>{v.pause();v.currentTime=14;});
+    await page.waitForFunction(()=>{const v=document.querySelector('#monitorVideo');return !v.seeking&&Math.abs(v.currentTime-14)<.02;});
     await page.evaluate(()=>{window.layoutMedia=document.querySelector('#monitorVideo');window.layoutFrame=document.querySelector('#twinFrame');});
     assert.equal(await page.locator('#taskCaptureVideo').isEnabled(),true);
     pass('公开真实录像解码后启用顶部冻结标注入口');
@@ -55,12 +57,12 @@ const near = (a,b,eps=1) => assert(Math.abs(a-b)<=eps,`${a} 与 ${b} 相差超�
     assert.equal(await page.locator('[data-equipment=radar]').getAttribute('aria-pressed'),'true');
     await page.locator('#taskEquipmentDrawer > summary').click();
     await page.locator('.monitor-details > summary').click();
-    assert.equal(await page.locator('#monitorResolution').textContent(),'1080 × 1920');
+    assert.equal(await page.locator('#monitorResolution').textContent(),'1920 × 1080');
     await page.locator('.monitor-details > summary').click();
     await page.locator('[data-action=task-evidence]').click();
     await page.locator('#taskEvidenceDrawer > summary').click();
     assert(await page.evaluate(()=>document.querySelector('#monitorVideo')===layoutMedia&&document.querySelector('#twinFrame')===layoutFrame));
-    near(await page.locator('#monitorVideo').evaluate(v=>v.currentTime),7,.02);
+    near(await page.locator('#monitorVideo').evaluate(v=>v.currentTime),captureTime,.02);
     assert.equal((await scene()).firstPerson,true);
     pass('设备、来源说明及标注面板折叠不重建视频和场景，第一人称及录像时间保留');
     await page.locator('#taskCaptureVideo').click();
@@ -71,17 +73,17 @@ const near = (a,b,eps=1) => assert(Math.abs(a-b)<=eps,`${a} 与 ${b} 相差超�
     pass('顶部按钮冻结实际视频帧并展开左侧标注区',{frame:frozen});
     await page.locator('#evidenceSceneMode').selectOption('evidence');
     const rect=await page.locator('#evidenceFrame').boundingBox();
-    await page.locator('#evidenceFrame').click({position:{x:rect.width*.48,y:rect.height*.69}});
-    await page.locator('#evidenceType').selectOption('crack');await page.locator('#evidenceSave').click();
+    await page.locator('#evidenceFrame').click({position:{x:rect.width*fixture.points[1].u,y:rect.height*fixture.points[1].v}});
+    assert.equal(await page.locator('#evidenceType').count(),0);await page.locator('#evidenceSave').click();
     await page.waitForFunction(()=>SLZJ.snapshot().evidenceRecords.length===1);
     const record=(await state()).evidenceRecords[0];
     await frame.waitForFunction(id=>SLZJScene.snapshot().visibleIds.includes(id),record.id);
     const p=(await scene()).positions.find(p=>p.id===record.id);
     near(p.x,record.position.x,1e-8);near(p.y,record.position.y,1e-8);near(p.z,record.position.z,1e-8);
-    assert.equal(p.type,'crack');assert.equal(await page.locator('#taskEvidenceCount').textContent(),'1 条记录');
+    assert.equal(record.type,null);assert.equal(p.type,'suspected');assert.equal(await page.locator('#taskEvidenceCount').textContent(),'1 条记录');
     assert.equal(page.frames().find(f=>f.url().includes('tunnel-scene.html')),frame);
     assert.equal((await scene()).firstPerson,true);assert.deepEqual((await state()).defects,initial.defects);
-    pass('左侧标注即时映射至右侧同一类型和XYZ，不重建场景或改写原台账');
+    pass('左侧疑似点无需类型，右侧中性定位点与XYZ一致，不重建场景或改写原台账');
     await page.locator('#evidenceSave').scrollIntoViewIfNeeded();
     const sticky=await page.locator('.task-simulation-pane').boundingBox();
     assert(sticky.y>=70&&sticky.y<100);
@@ -128,7 +130,7 @@ const near = (a,b,eps=1) => assert(Math.abs(a-b)<=eps,`${a} 与 ${b} 相差超�
     pass('折叠面板不打断摄像头会话（自动化虚拟设备）');
     await page.locator('#monitorFile').setInputFiles(videoFile);
     await page.waitForFunction(()=>TunnelVideoMonitor.evidenceIdentity().ready&&TunnelVideoMonitor.evidenceIdentity().sourceId?.startsWith('VF-'));
-    await page.locator('#monitorVideo').evaluate(v=>{v.pause();v.currentTime=7;});
+    await page.locator('#monitorVideo').evaluate(v=>{v.pause();v.currentTime=14;});
     await page.waitForFunction(()=>!document.querySelector('#monitorVideo').seeking);
     for(const width of [768,390]) {
       await page.setViewportSize({width,height:1000});await page.evaluate(()=>window.scrollTo(0,0));

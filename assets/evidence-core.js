@@ -1,4 +1,4 @@
-/* 现场证据对应核心：类型由人工/外部标注给出，工程位置须显式给出；不执行病害自动识别。 */
+/* 现场证据对应核心：采集疑似位置，不猜测病害类型；保留旧记录已有分类，工程位置须有依据。 */
 (function(root,factory){"use strict";const api=factory();if(typeof module==="object"&&module.exports)module.exports=api;else root.TunnelEvidenceCore=api;})(typeof globalThis!=="undefined"?globalThis:this,function(){
  "use strict";
  const TYPES={crack:"表面裂缝",seepage:"表面渗水",spalling:"剥落 / 破损",corrosion:"锈蚀 / 腐蚀",void:"空气空洞",water:"充水 / 富水异常",debond:"管片脱空",loose:"不密实",rebar:"钢筋异常 / 外露"};
@@ -39,11 +39,12 @@
   return Object.fromEntries(fields.filter(f=>a[f]!==undefined).map(f=>[f,a[f]]));
  }
  function validate(state,c,input){
-  if(!Object.hasOwn(TYPES,input.type))throw Error("请选择支持的病害类型");
+  const type=input.type===undefined||input.type===null||input.type===""?null:input.type;
+  if(type!==null&&(typeof type!=="string"||!Object.hasOwn(TYPES,type)))throw Error("不支持的病害类型；采集疑似位置可留空");
   if(!/^E-[A-Za-z0-9-]{3,76}$/.test(input.id)||!Array.isArray(input.anchors))throw Error("需要 E- 开头的唯一编号与证据数组");
   const loc=location(state.project,c,input),anchors=input.anchors.map(a=>anchor(a,c));
   if(!anchors.length||anchors.length>20)throw Error("每个病害需有 1～20 条证据");
-  return Object.assign({id:text(input.id,"病害编号",80),batchId:c.batchId,taskId:c.taskId,type:input.type,typeName:TYPES[input.type],labelBasis:"人工证据标注（非自动识别）",review:"待专业复核",createdAt:input.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),anchors},loc);
+  return Object.assign({id:text(input.id,"病害编号",80),batchId:c.batchId,taskId:c.taskId,type,typeName:type===null?"疑似点（待识别）":TYPES[type],classificationStatus:type===null?"pending":"provided",labelBasis:type===null?"人工记录疑似位置（未判断类型）":"保留或人工复核的类型记录（非自动识别）",review:"待专业复核",createdAt:input.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),anchors},loc);
  }
  function ordered(values){
   const groups=new Map();
@@ -73,7 +74,7 @@
  function add(state,c,input,a,targetId){
   init(state);const existing=targetId?records(state,c).find(r=>r.id===targetId):null;
   if(targetId&&!existing)throw Error("待关联病害不存在或属于其他任务");
-  const value=validate(state,c,Object.assign({},input,{id:existing?.id||"E-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8),anchors:existing?[...existing.anchors,a]:[a],createdAt:existing?.createdAt}));
+  const value=validate(state,c,Object.assign({},input,{type:existing&&(input.type===null||input.type===undefined||input.type==="")?existing.type:input.type,id:existing?.id||"E-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8),anchors:existing?[...existing.anchors,a]:[a],createdAt:existing?.createdAt}));
   if(existing&&(existing.type!==value.type||["mileage","angle","depth"].some(k=>Math.abs(existing[k]-value[k])>1e-7)))throw Error("关联同一病害时，类型及位置必须一致；请先统一修改病害位置，再关联证据");
   ordered([...state.evidenceRecords.filter(r=>r!==existing),value]);
   if(state.evidenceRecords.length>=200&&!existing)throw Error("现场标注达到 200 条上限，请先导出或删除旧记录");
@@ -100,10 +101,10 @@
   const result={mileage:cal.startMileage+cal.direction*trace*m.traceSpacingM,angle:cal.angle,depth:(sample-cal.zeroSample)*m.sampleIntervalNs*.299792458/(2*Math.sqrt(m.epsilon)),positionBasis:"测线标定换算（须核验起点、方向、环位、零点与介电常数）"};
   return Object.assign(result,location(p,c,result));
  }
- function scene(state,c){return visible(state,c).slice().sort((a,b)=>a.mileage-b.mileage).map(r=>({id:r.id,type:r.type,typeName:r.typeName,mileage:r.mileage,ring:r.ring,angle:r.angle,depth:r.depth,position:copy(r.position),risk:"unrated",score:null,diameter:.12,length:.35,area:0,confidence:null,review:"pending",markerOnly:true,source:r.labelBasis}));}
- function exportData(state,c){return {schemaVersion:1,kind:"tunnel-evidence-correspondence",project:copy(state.project),context:copy(c),records:copy(records(state,c)),boundary:"像素/道号不自动等于工程坐标；类型为人工标注，位置依据逐条保留；三维形状与尺寸仅为定位标记。"};}
+ function scene(state,c,options={}){return visible(state,c).slice().sort((a,b)=>a.mileage-b.mileage).map((r,i)=>({id:r.id,type:options.positionOnly||!r.type?"suspected":r.type,typeName:options.positionOnly||!r.type?"疑似点":r.typeName,classificationStatus:r.type?"provided":"pending",sequence:i+1,mileage:r.mileage,ring:r.ring,angle:r.angle,depth:r.depth,position:copy(r.position),risk:"unrated",score:null,diameter:.12,length:.35,area:0,confidence:null,review:"pending",markerOnly:true,source:r.labelBasis}));}
+ function exportData(state,c){return {schemaVersion:2,kind:"tunnel-evidence-correspondence",project:copy(state.project),context:copy(c),records:copy(records(state,c)),boundary:"采集阶段仅记录疑似位置与出现顺序；新视频记录 type=null，待第二阶段识别。保留已有类型记录。像素/道号不自动等于工程坐标；三维尺寸仅为定位标记。"};}
  function importData(state,c,value){
-  if(!value||value.schemaVersion!==1||value.kind!=="tunnel-evidence-correspondence"||!Array.isArray(value.records))throw Error("不是有效的现场证据对应 JSON");
+  if(!value||![1,2].includes(value.schemaVersion)||value.kind!=="tunnel-evidence-correspondence"||!Array.isArray(value.records))throw Error("不是有效的现场证据对应 JSON");
   if(value.context?.batchId!==c.batchId||value.context?.taskId!==c.taskId)throw Error("导入批次 / 任务与当前页面不一致");
   if(["start","length","radius","ringStart","ringLength"].some(k=>value.project?.[k]!==state.project[k]))throw Error("导入项目坐标基准不一致");
   init(state);const staged=value.records.map(input=>{if(input.batchId!==c.batchId||input.taskId!==c.taskId)throw Error("记录批次 / 任务不一致");return validate(state,c,input);});

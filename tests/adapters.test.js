@@ -6,8 +6,8 @@ const payload=()=>({matrix:[[1,2],[3,4]],metadata:{sampleIntervalNs:.1},paramete
 const completed=(value,version='v1')=>({status:'completed',source:'测试回调，非真实算法',version,result:{value}});
 async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 async function main(){
-  await test('四个候选默认未接入，调用明确失败',async()=>{
-    assert.deepEqual(A.list().map(a=>a.name),['RCAN','RTM','TunGPR','T-GPRMask']);
+  await test('两个雷达处理接口默认未接入，调用明确失败',async()=>{
+    assert.deepEqual(A.list().map(a=>a.name),['RCAN','RTM']);
     assert.ok(A.list().every(a=>a.connected===false&&a.version===null));
     for(const name of A.list().map(a=>a.name))await assert.rejects(A.run(name,payload()),/未接入/);
   });

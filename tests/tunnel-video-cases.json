@@ -1,0 +1,85 @@
+[
+  {
+    "file": "metro-tunnel-scan-equipment.mp4",
+    "url": "https://www.h-eye.cn/upload/mp4/202208/WeChat_20220825133355.mp4",
+    "sourcePage": "https://www.h-eye.cn/Track_inspection/6",
+    "source": "昊艾智能官网：轨道隧道扫描设备现场作业（设备近景）",
+    "sha256": "63d65b435539fb430a44e99a93a019a880ce8ab72946bea61158bd09c7f8474b",
+    "inspectionContext": "实际轨道隧道内的扫描设备及管片衬砌",
+    "sessionGroup": "h-eye-metro-scan",
+    "license": "官网未注明视频独立复用许可；仅用于本地验证，不随代码发布。",
+    "points": [
+      {
+        "time": 5,
+        "u": 0.61,
+        "v": 0.66
+      },
+      {
+        "time": 12,
+        "u": 0.68,
+        "v": 0.85
+      },
+      {
+        "time": 20,
+        "u": 0.62,
+        "v": 0.55
+      }
+    ]
+  },
+  {
+    "file": "metro-tunnel-scan-follow.mp4",
+    "url": "https://www.h-eye.cn/upload/mp4/202208/WeChat_20220825133403.mp4",
+    "sourcePage": "https://www.h-eye.cn/Track_inspection/6",
+    "source": "昊艾智能官网：轨道隧道扫描设备现场作业（人员跟拍）",
+    "sha256": "767d22e5a763c89724b308f1ad3c8d584276e676c67f6f671b2abc38f8152a3a",
+    "inspectionContext": "同一轨道隧道扫描作业的不同拍摄片段，含人员与设备",
+    "sessionGroup": "h-eye-metro-scan",
+    "license": "官网未注明视频独立复用许可；仅用于本地验证，不随代码发布。",
+    "points": [
+      {
+        "time": 1,
+        "u": 0.59,
+        "v": 0.53
+      },
+      {
+        "time": 3,
+        "u": 0.62,
+        "v": 0.58
+      },
+      {
+        "time": 5,
+        "u": 0.69,
+        "v": 0.56
+      }
+    ]
+  },
+  {
+    "file": "highway-tunnel-gpr.mp4",
+    "playbackFile": "highway-tunnel-gpr-h264.mp4",
+    "url": "https://faculty.swjtu.edu.cn/_resources/group1/M00/00/5D/wKi3Fmk-exyAYVqoBA49SCbU43I546.mp4",
+    "sourcePage": "https://faculty.swjtu.edu.cn/zanyuewen/en/yjfx/266774/content/9775.htm",
+    "source": "西南交通大学教师主页：高速公路隧道非接触车载三维探地雷达检测；视频署名西南交通大学深圳研究院，2025-11",
+    "sha256": "28590b8393464f692931e718821e3083a1bb60ae749278ff955edd997946bce0",
+    "inspectionContext": "隧道内车载雷达检测作业与后段处理展示；只在 10 / 14 / 18 秒第一处隧道的原始拍摄段选点",
+    "sessionGroup": "swjtu-highway-gpr",
+    "license": "学校公开页面未注明视频独立复用许可；仅用于本地验证，不随代码发布。",
+    "uiExample": true,
+    "points": [
+      {
+        "time": 10,
+        "u": 0.72,
+        "v": 0.58
+      },
+      {
+        "time": 14,
+        "u": 0.17,
+        "v": 0.72
+      },
+      {
+        "time": 18,
+        "u": 0.73,
+        "v": 0.4
+      }
+    ]
+  }
+]
