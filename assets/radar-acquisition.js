@@ -290,5 +290,11 @@
     if(nextRoute!=="radar" && active){recordEvent("离开雷达页，停止网络接入");stop("已离开雷达页并停止接入，返回后手动重连；最后有效帧仍可下载。");}
   }
   window.addEventListener("pagehide",()=>{if(root)stop("页面已关闭，接入已停止。");});
-  window.TunnelRadarAcquisition={mount,beforeRender,parseFrame,normalizeTime};
+  function evidenceSnapshot(){
+    const data=dataset();
+    if(preview!=="archive"||!data?.id||data.batchId!==context.batchId||data.taskId!==context.taskId)throw Error("先选择本任务的已保存雷达快照；实时帧须先保存到数据目录");
+    return {data:C.clone?C.clone(data):JSON.parse(JSON.stringify(data)),trace:viewTrace};
+  }
+  function seekEvidence(anchor){const data=dataset();if(preview!=="archive"||data?.id!==anchor.archiveId)throw Error("原雷达快照未选中或已删除");viewTrace=anchor.trace;$("#externalTrace").value=viewTrace;refresh();}
+  window.TunnelRadarAcquisition={mount,beforeRender,parseFrame,normalizeTime,evidenceSnapshot,seekEvidence};
 })();

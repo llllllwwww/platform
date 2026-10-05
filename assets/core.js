@@ -396,6 +396,8 @@
         excludedCounts:{tasks:(state.tasks||[]).length-scopedTasks.length,alerts:(state.alerts||[]).length-scopedAlerts.length,logs:(state.logs||[]).length-scopedLogs.length,
           radarData:(state.radars||[]).length-scopedRadars.length,maintenance:(state.maintenance||[]).length-scopedMaintenance.length},
         simulation:'仅保留当前批次仿真；无批次外部分析以项目全局参考单独标注，不视为本批次结果。',globalSimulationKeys:globalSimulationKeys,excludedSimulationKeys:excludedSimulationKeys},
+      evidenceRecords:clone((state.evidenceRecords||[]).filter(function(r){return r.batchId===state.batch;})),
+      evidenceBoundary:'现场类型为人工标注；对应位置保留相对映射 / 标定依据，未自动纳入演示 SHI。',
       coordinateDefinition:'X=里程−项目起点；Y=(内半径+径向埋深)cos角度；Z=(内半径+径向埋深)sin角度；环向 0° 拱顶，90° 右墙，单位 m；病害定位于管片环中心。',
       sources:['原平台 16 条演示台账；历史批次为尺寸比例派生','外部 CSV / JSON / 网关帧只解析数值与元数据，不自动产生病害诊断','RCAN / RTM / 候选识别模型尚未接入，真实预处理为减背景与线性时间增益'],
       limitations:['演示评估不构成正式工程鉴定。','列表筛选不改变全局评估；filteredAssessment 单列当前筛选范围的诊断性分数。','置信度非诊断可靠性；内置证据与仿真信号均为演示。','严重病害直径规则适用于全部演示候选类型，实际规则应由专业人员按病害类别审定。']};

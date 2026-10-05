@@ -41,7 +41,7 @@ function az2z(az){ return  Math.sin(az * Math.PI / 180); }
 function ringX(r){ return PT.x0 + ((r + 0.5) - PT.ring0) * PT.segLen; }
 function ringIdx(r){ return r - PT.ring0; }
 function clamp(v,a,b){ return v < a ? a : (v > b ? b : v); }
-function fmt(v,n){ return Number(v).toFixed(n === undefined ? 2 : n); }
+function fmt(v,n){ return v==null||!Number.isFinite(Number(v))?"—":Number(v).toFixed(n === undefined ? 2 : n); }
 // 检测车航向角：使车体局部 +Z（车头/天线朝前）对齐隧道轴线前进方向。
 // 右手系绕 Y 旋转时，局部 +Z 映射为 (sinθ, 0, cosθ)，令其 = (1,0,0) 得 θ = π/2。
 function carHeading(){ return Math.PI / 2; }
@@ -106,7 +106,11 @@ var TYPE = {
   rebar:  { name:'钢筋异常', color:'#b44cff', shape:'dia',  w:0.30, adv:'保护层复核 + 锈蚀检测' },
   crack:  { name:'裂缝/渗漏',color:'#ffe14d', shape:'dia',  w:0.30, adv:'裂缝封闭 + 长期观测' }
 };
+TYPE.seepage={name:'表面渗水',color:'#5bcce9',shape:'cir',w:.3,adv:'待专业复核'};
+TYPE.spalling={name:'剥落 / 破损',color:'#f09b72',shape:'cir',w:.3,adv:'待专业复核'};
+TYPE.corrosion={name:'锈蚀 / 腐蚀',color:'#d89563',shape:'cir',w:.3,adv:'待专业复核'};
 var LEVEL = {
+  unrated:{name:'现场标注 / 未评估',color:'#56d9b1',text:'证据对应；不代表自动识别或工程分级'},
   I:   { name:'I 严重', color:'#ff3b3b', text:'立即专项检测，限期注浆回填' },
   II:  { name:'II 较重',color:'#ff9d2e', text:'纳入年度整治计划，加密监测' },
   III: { name:'III 一般',color:'#ffd633', text:'记录归档，定期复查' },
@@ -586,9 +590,8 @@ function layerRadius(d){
   return Math.max(r, PT.Ri + half + 0.01);
 }
 
-(function buildDefects(){
-  DEFECTS.forEach(function(d){
-    var t = TYPE[d.T];
+function buildDefect(d){
+    var t = Object.assign({},TYPE[d.T],{name:d._typeName||TYPE[d.T].name});
     var c = new THREE.Color(t.color);
     var grp = new THREE.Group();
     var grade = defectGrade(d);          // 等级由判据函数导出（单源，永不与评分矛盾）
@@ -722,8 +725,8 @@ function layerRadius(d){
     defectMeshes.push({ def:d, mesh:core, group:grp, halo:haloMesh, haloR:haloR,
                         pos:pos, anchor:out, lbl:lbl, out:out,
                         hlBox:hlBox, hlEdge:hlEdge, haloScale0:haloMesh.scale.clone() });
-  });
-})();
+}
+DEFECTS.forEach(buildDefect);
 
 // ==================================================================== 检测车（多机械臂 GPR 检测系统）
 // 车体分两层：
@@ -1408,6 +1411,7 @@ function densityScore(){
 // 裂缝/不密实/钢筋异常 按单体评分分档。平台展示的等级一律由此函数导出，
 // 保证"清单等级 ↔ 评分 ↔ 判据"三者永不矛盾。
 function defectGrade(d){
+  if(d.markerOnly)return "unrated";
   if (d.T === 'void' || d.T === 'water' || d.T === 'debond'){
     if (d.d >= 0.30) return 'I';                    // 直径 ≥ 30 cm：严重
     if (d.d >= 0.10) return d._score < 56 ? 'II' : 'III';
@@ -1607,6 +1611,12 @@ function renderDetail(dm){
     return;
   }
   var d = dm.def, t = TYPE[d.T], lv = LEVEL[d.L];
+  if(d.markerOnly){
+    empty.style.display='none';body.style.display='';idxEl.textContent=d.id;
+    var safe=function(v){return String(v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});};
+    body.innerHTML='<div class="dh"><div class="t">'+safe(d._typeName||t.name)+'</div></div><p>现场人工标注 / 相对位置对应 · 待专业复核</p><p>里程 '+Number(d._mileage).toFixed(3)+' m · 环位 '+Number(d.az).toFixed(2)+'° · 径向位置 '+Number(d.h).toFixed(3)+' m</p><p>三维形状为定位标记；尺寸、置信度与评分未知。</p><div class="btns"><div class="btn" id="btnZoom">视角聚焦</div><div class="btn" id="btnPrev">上一处</div><div class="btn" id="btnNext2">下一处</div></div>';
+    document.getElementById('btnZoom').onclick=function(){focusDefect(dm);};document.getElementById('btnPrev').onclick=function(){stepDefect(-1);};document.getElementById('btnNext2').onclick=function(){stepDefect(1);};drawRing(dm);return;
+  }
   empty.style.display = 'none';
   body.style.display = '';
   idxEl.textContent = d.id;
@@ -1974,6 +1984,20 @@ var fp = {
 var carEye = new THREE.Vector3(0.00, 1.60, -0.45);   // 相机（云台）在车体局部坐标中的位置
 
 var carHudEl  = document.getElementById('carHud');
+// HUD 只收起界面；保持同一雷达画布、作业状态和第一人称相机。
+var carHudToggle = document.getElementById('carHudToggle');
+if (carHudToggle) carHudToggle.addEventListener('click', function(){
+  var minimized = carHudEl.classList.toggle('is-minimized');
+  document.getElementById('carHudBody').hidden = minimized;
+  carHudToggle.setAttribute('aria-expanded', String(!minimized));
+  carHudToggle.setAttribute('aria-label', minimized ? '展开雷达面板' : '收起雷达面板');
+  carHudToggle.title = minimized ? '展开雷达面板' : '收起雷达面板';
+  carHudToggle.textContent = minimized ? '+' : '−';
+});
+// Enter / 空格操作折叠控件时，不触发场景的空格启停快捷键。
+carHudEl.addEventListener('keydown', function(event){
+  if (event.key === ' ' || event.key === 'Enter') event.stopPropagation();
+});
 var ringFlashEl = document.getElementById('ringFlash');
 var flashTimer = 0;
 
@@ -2176,7 +2200,7 @@ function bscanDraw(carX, tp){
   }
   // 已收录病害（按里程排序，便于逐列判断邻近）
   var ds = DEFECTS.filter(function(d){ return isVisible(d); })
-                  .map(function(d){ return { d:d, x:ringX(d.ring), row0:scanRow(4.4 + (d.h || 0) * 26),
+                  .map(function(d){ return { d:d, x:d.markerOnly?d._sceneX:ringX(d.ring), row0:scanRow(4.4 + (d.h || 0) * 26),
                                             amp:1.05 + 0.95 * (d.d || 0.2) }; });
   for (var x = 0; x < BW; x++){
     var wx = carX + ((x / (BW - 1)) * 2 - 1) * WIN;        // 该列对应的里程
@@ -2277,22 +2301,24 @@ function hudUpdate(carX){
   var last = null, best = 1e9;
   DEFECTS.forEach(function(d){
     if (!isVisible(d)) return;
-    var dd = Math.abs(carX - ringX(d.ring));
+    var dd = Math.abs(carX - (d.markerOnly?d._sceneX:ringX(d.ring)));
     if (dd < best){ best = dd; last = d; }
   });
-  if (last && best < 3.0 && (last.L === 'I' || last.L === 'II')){
+  if(last&&last.markerOnly&&best<3.0){chAlertEl.className='ch-alert quiet';chAlertEl.textContent='对应标注：'+last._typeName+' · '+Number(last._mileage).toFixed(3)+' m · '+fmt(best,2)+' m（未作自动识别）';}
+  else if (last && best < 3.0 && (last.L === 'I' || last.L === 'II')){
     chAlertEl.className = 'ch-alert';
-    chAlertEl.innerHTML = '⚠ 检出 ' + LEVEL[last.L].name + '　' + TYPE[last.T].name +
+    chAlertEl.innerHTML = '⚠ 检出 ' + LEVEL[last.L].name + '　' + (last._typeName||TYPE[last.T].name) +
       '　' + last.ring + '环 / ' + fmt(last.az, 0) + '°　' + fmt(best, 1) + ' m' +
       '　置信度 ' + fmt(last.C * 100, 0) + '%';
   } else if (last && best < 1.6){
     chAlertEl.className = 'ch-alert quiet';
-    chAlertEl.innerHTML = '· 近旁回波：' + TYPE[last.T].name + '（' + LEVEL[last.L].name +
+    chAlertEl.innerHTML = '· 近旁回波：' + (last._typeName||TYPE[last.T].name) + '（' + LEVEL[last.L].name +
       '）' + last.ring + ' 环　' + fmt(best, 1) + ' m';
   } else {
     chAlertEl.className = 'ch-alert quiet';
-    chAlertEl.textContent = '本段未发现异常回波';
+    chAlertEl.textContent = bridgeEvidenceMode?'暂无邻近现场标注':'本段未发现异常回波';
   }
+  chAlertEl.title = chAlertEl.textContent;
 }
 
 
@@ -2643,26 +2669,36 @@ function hostSend(type,data){if(!embedded||hostMuted)return;parent.postMessage(O
 var oldSelect=select;select=function(dm){oldSelect(dm);if(dm)hostSend('selected',{id:dm.def.id});};
 function bridgeFocus(dm){if(fp.on)toggleFP(false);if(fly.on)toggleFly(false);releaseCut();camTween={t:0,f:{target:orbit.target.clone(),theta:orbit.theta,phi:orbit.phi,dist:orbit.dist},t2:{target:dm.pos.clone(),theta:1.05,phi:1.10,dist:7}};}
 function rebuildRisk(defs){while(riskGroup.children.length){var m=riskGroup.children.pop();m.geometry.dispose();m.material.dispose();}for(var x=0;x<48;x+=6){var rs=defs.filter(function(d){return d.position.x>=x&&d.position.x<x+6&&d.review!=='rejected';}).map(function(d){return ['I','II','III','IV'].indexOf(d.risk);});var level=['I','II','III','IV'][Math.min.apply(null,rs.concat([3]))];var mat=new THREE.MeshBasicMaterial({color:bridgeRiskColors[level],transparent:true,opacity:.18,side:THREE.DoubleSide,depthWrite:false});var ring=new THREE.Mesh(new THREE.CylinderGeometry(3.18,3.18,5.8,56,1,true),mat);ring.rotation.z=Math.PI/2;ring.position.x=x+3;riskGroup.add(ring);}}
+var bridgeEvidenceMode=false;
+function removeEvidenceMesh(dm){gDefect.remove(dm.group);dm.lbl.remove();dm.group.traverse(function(o){if(o.geometry)o.geometry.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(function(m){m.dispose();});}});defectMeshes.splice(defectMeshes.indexOf(dm),1);var i=DEFECTS.indexOf(dm.def);if(i>=0)DEFECTS.splice(i,1);delete bridgeOriginal[dm.def.id];}
+function updateEvidenceMeshes(defs){
+ defectMeshes.slice().filter(function(dm){return dm.def.markerOnly;}).forEach(function(dm){var d=defs.find(function(d){return d.id===dm.def.id;});if(!d||d.type!==dm.def.T)removeEvidenceMesh(dm);});
+ defs.filter(function(d){return d.markerOnly&&!defectMeshes.some(function(dm){return dm.def.id===d.id;});}).forEach(function(d){
+  var raw={id:d.id,T:d.type,ring:d.ring,az:d.angle,h:d.depth,d:.12,Lm:.35,S:0,C:NaN,L:'unrated',_score:NaN,markerOnly:true,_typeName:d.typeName,img:'现场证据对应',note:'人工标注，形状仅为定位标记',adv:'待专业复核'};
+  DEFECTS.push(raw);buildDefect(raw);var dm=defectMeshes[defectMeshes.length-1];bridgeOriginal[d.id]={diameter:.12,scale:dm.mesh.scale.clone(),haloScale:dm.haloScale0.clone()};
+ });
+}
 window.addEventListener('message',function(event){
  if(!embedded||event.source!==parent||(location.protocol==='file:'?['null','file://'].indexOf(event.origin)<0:event.origin!==location.origin))return;
  var msg=event.data;if(!msg||msg.channel!=='slzj')return;hostMuted=true;
  try{
   if(msg.type==='sync'){
-   var defs=Array.isArray(msg.defects)?msg.defects:[];
+   var defs=Array.isArray(msg.defects)?msg.defects:[];bridgeEvidenceMode=!!msg.evidenceMode;updateEvidenceMeshes(defs);
    defectMeshes.forEach(function(dm){var d=defs.find(function(x){return x.id===dm.def.id;});dm.group.visible=!!d;if(!d)return;
     var target=new THREE.Vector3(d.position.x,d.position.y,d.position.z),delta=target.clone().sub(dm.pos);
     dm.group.children.forEach(function(ch){if(ch.isLine&&!ch.isLineSegments&&ch.geometry.attributes.position){var ar=ch.geometry.attributes.position;for(var i=0;i<ar.count;i++)ar.setXYZ(i,ar.getX(i)+delta.x,ar.getY(i)+delta.y,ar.getZ(i)+delta.z);ar.needsUpdate=true;ch.geometry.computeBoundingSphere();}else ch.position.add(delta);});
     dm.pos.copy(target);dm.out.add(delta);
     var base=bridgeOriginal[d.id],ratio=d.diameter/base.diameter;dm.mesh.scale.copy(base.scale).multiplyScalar(ratio);dm.haloScale0.copy(base.haloScale).multiplyScalar(ratio);
-    dm.def.ring=d.ring;dm.def.az=d.angle;dm.def.L=d.risk;dm.def._score=d.score;dm.def.d=d.diameter;dm.def.h=d.depth;dm.def.Lm=d.length;dm.def.S=d.area;dm.def.C=d.confidence;
-    var col=bridgeRiskColors[d.risk];dm.mesh.material.color.set(col);if(dm.mesh.material.emissive)dm.mesh.material.emissive.set(col);dm.halo.material.color.set(col);
-    dm.lbl.textContent=d.id+' · '+TYPE[dm.def.T].name;dm.lbl.style.color=col;dm.lbl.className='lbl lv-'+d.risk;
+    dm.def.ring=d.ring;dm.def.az=d.angle;dm.def.L=d.risk;dm.def._score=d.score;dm.def.d=d.diameter;dm.def.h=d.depth;dm.def.Lm=d.length;dm.def.S=d.area;dm.def.C=d.markerOnly?NaN:d.confidence;dm.def.markerOnly=!!d.markerOnly;dm.def._typeName=d.typeName;dm.def._mileage=d.mileage;dm.def._sceneX=d.position.x;
+    if(d.markerOnly){dm.def.d=NaN;dm.def.Lm=NaN;dm.def.S=NaN;dm.def._score=NaN;}
+    var col=d.markerOnly?TYPE[d.type].color:bridgeRiskColors[d.risk];dm.mesh.material.color.set(col);if(dm.mesh.material.emissive)dm.mesh.material.emissive.set(col);dm.halo.material.color.set(col);
+    dm.lbl.textContent=d.id+' · '+(d.typeName||TYPE[dm.def.T].name);dm.lbl.style.color=col;dm.lbl.className='lbl lv-'+d.risk;
    });
-   rebuildRisk(defs);var selected=defectMeshes.find(function(dm){return dm.def.id===msg.selectedId&&dm.group.visible;});select(selected||null);SHI=Number(msg.shi)||0;
+   rebuildRisk(defs.filter(function(d){return !d.markerOnly;}));if(bridgeEvidenceMode)riskGroup.visible=false;var selected=defectMeshes.find(function(dm){return dm.def.id===msg.selectedId&&dm.group.visible;});select(selected||null);SHI=bridgeEvidenceMode?NaN:(Number(msg.shi)||0);
   }
   if(msg.type==='select'){var dm=defectMeshes.find(function(d){return d.def.id===msg.id&&d.group.visible;});if(dm){select(dm);bridgeFocus(dm);}}
   if(msg.type==='view'){if(fp.on)toggleFP(false);setView(msg.view,true);orbit.apply();}
-  if(msg.type==='layer'){var layerMap={shell:gShell,defect:gDefect,rebar:gRebar,grout:gGrout,ground:gGround,car:gCar,ray:gRay,risk:riskGroup,profile:gProfile,stars:bgStars,city:bgCity,coverage:coverageGroup};if(layerMap[msg.name])layerMap[msg.name].visible=!!msg.visible;if(msg.name==='hud')document.body.classList.toggle('no-hud',!msg.visible);if(msg.name==='labelsAll')document.getElementById('ckLabelAll').checked=!!msg.visible;if(msg.name==='labels'){document.getElementById('ckLabel').checked=!!msg.visible;labelLayer.style.display=msg.visible?'':'none';}}
+  if(msg.type==='layer'){var layerMap={shell:gShell,defect:gDefect,rebar:gRebar,grout:gGrout,ground:gGround,car:gCar,ray:gRay,risk:riskGroup,profile:gProfile,stars:bgStars,city:bgCity,coverage:coverageGroup};if(layerMap[msg.name])layerMap[msg.name].visible=msg.name==='risk'&&bridgeEvidenceMode?false:!!msg.visible;if(msg.name==='hud')document.body.classList.toggle('no-hud',!msg.visible);if(msg.name==='labelsAll')document.getElementById('ckLabelAll').checked=!!msg.visible;if(msg.name==='labels'){document.getElementById('ckLabel').checked=!!msg.visible;labelLayer.style.display=msg.visible?'':'none';}}
   if(msg.type==='opacity')shellMat.uniforms.uOpacity.value=clamp(Number(msg.value)||0,.02,.9);
   if(msg.type==='cut'){if(msg.value===null)releaseCut();else engageCut(clamp(Number(msg.value),0,48),false);}
   if(msg.type==='roam'){toggleFP();}
@@ -2690,7 +2726,7 @@ if(embedded){
  focusDefect=bridgeFocus;
  window.addEventListener('keydown',function(e){if(e.key==='p'||e.key==='P'){e.preventDefault();e.stopImmediatePropagation();hostSend('toggle-task');}},true);
  // 只读场景状态供集成验收使用；不提供任意执行接口。
- window.SLZJScene={snapshot:function(){return {firstPerson:fp.on,freeFly:fly.on,autoRotate:orbit.autoRotate,layers:{stars:bgStars&&bgStars.visible,city:bgCity.visible,ground:gGround.visible,grout:gGrout.visible,rebar:gRebar.visible,profile:gProfile.visible,car:gCar.visible,ray:gRay.visible},backgroundImage:!!(scene.background&&scene.background.isTexture),selectedId:state.sel&&state.sel.def.id,carX:gCar.userData.car.position.x,playing:!carPaused,visibleIds:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){return dm.def.id;}),positions:defectMeshes.map(function(dm){return {id:dm.def.id,x:dm.pos.x,y:dm.pos.y,z:dm.pos.z};}),projected:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){var p=dm.mesh.getWorldPosition(new THREE.Vector3()).project(camera);return {id:dm.def.id,x:(p.x*.5+.5)*window.innerWidth,y:(-p.y*.5+.5)*window.innerHeight,z:p.z};}),obstacleVisible:obstacleMesh.visible,opacity:shellMat.uniforms.uOpacity.value};}};
+ window.SLZJScene={snapshot:function(){return {firstPerson:fp.on,freeFly:fly.on,autoRotate:orbit.autoRotate,layers:{stars:bgStars&&bgStars.visible,city:bgCity.visible,ground:gGround.visible,grout:gGrout.visible,rebar:gRebar.visible,profile:gProfile.visible,car:gCar.visible,ray:gRay.visible},backgroundImage:!!(scene.background&&scene.background.isTexture),selectedId:state.sel&&state.sel.def.id,carX:gCar.userData.car.position.x,playing:!carPaused,visibleIds:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){return dm.def.id;}),positions:defectMeshes.map(function(dm){return {id:dm.def.id,type:dm.def.T,typeName:dm.def._typeName||TYPE[dm.def.T].name,markerOnly:!!dm.def.markerOnly,x:dm.pos.x,y:dm.pos.y,z:dm.pos.z};}),projected:defectMeshes.filter(function(dm){return dm.group.visible;}).map(function(dm){var p=dm.mesh.getWorldPosition(new THREE.Vector3()).project(camera);return {id:dm.def.id,x:(p.x*.5+.5)*window.innerWidth,y:(-p.y*.5+.5)*window.innerHeight,z:p.z};}),obstacleVisible:obstacleMesh.visible,opacity:shellMat.uniforms.uOpacity.value};}};
  setTimeout(function(){hostSend('ready');},50);
 }
 // SLZJ_BRIDGE_END

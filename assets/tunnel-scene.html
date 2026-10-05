@@ -9,8 +9,10 @@
 <style>
 body.embedded { background:#07101c; }
 body.embedded > :not(#stage):not(#labels):not(#loading):not(#carHud):not(#flyHud):not(#tip):not(#ringFlash):not(script):not(style){display:none!important}
-body.embedded #carHud{left:auto;right:10px;bottom:10px;width:300px;transform:none;max-height:72%;overflow:auto}body.embedded.no-hud #carHud{display:none!important}body.embedded #flyHud{bottom:10px;font-size:10px;max-width:90%}body.embedded .lbl{font-size:10px!important;background:#102334e8!important;border:1px solid #426070!important;box-shadow:none!important;padding:3px 7px!important;max-width:150px}
-</style></head>
+body.embedded.no-hud #carHud{display:none!important}body.embedded #flyHud{bottom:10px;font-size:10px;max-width:90%}body.embedded .lbl{font-size:10px!important;background:#102334e8!important;border:1px solid #426070!important;box-shadow:none!important;padding:3px 7px!important;max-width:150px}
+</style>
+<link rel="stylesheet" href="car-hud.css">
+</head>
 <body class="embedded">
 
 <div id="stage"></div>
@@ -185,18 +187,21 @@ body.embedded #carHud{left:auto;right:10px;bottom:10px;width:300px;transform:non
 <div id="tip"></div>
 
 <!-- ================= 检测车第一视角 HUD ================= -->
-<div id="carHud">
+<div id="carHud" role="region" aria-label="检测车第一视角 · 探地雷达实时采集">
   <div class="ch-top">
     <span class="ch-rec"><i></i><span class="rec-txt">REC</span></span>
-    <span class="ch-t">检测车第一视角 · 探地雷达实时采集</span>
-    <span class="ch-sp">GPR 400 MHz</span>
+    <span class="ch-t" title="检测车第一视角 · 探地雷达实时采集">车载雷达</span>
+    <button type="button" id="carHudToggle" class="ch-toggle" aria-controls="carHudBody" aria-expanded="true" aria-label="收起雷达面板" title="收起雷达面板">−</button>
   </div>
-  <canvas id="bscan" width="800" height="236"></canvas>
-  <div class="ch-bar">
-    <span>里程</span>
-    <span class="track"><i id="chBar"></i></span>
-    <b id="chMile">K3+128</b>
-  </div>
+  <div id="carHudBody" class="ch-body">
+    <canvas id="bscan" width="800" height="236"></canvas>
+    <div class="ch-bar">
+      <span>里程</span>
+      <span class="track"><i id="chBar"></i></span>
+      <b id="chMile">K3+128</b>
+    </div>
+    <details id="carHudDetails" class="ch-details">
+      <summary><span>作业详情</span><span class="ch-sp">GPR 400 MHz</span></summary>
   <div class="ch-grid">
     <div class="ch-cell"><div class="k">当前环号</div><div class="v" id="chRing">980</div></div>
     <div class="ch-cell"><div class="k">作业速度</div><div class="v" id="chSpeed">3.6 m/s</div></div>
@@ -207,9 +212,11 @@ body.embedded #carHud{left:auto;right:10px;bottom:10px;width:300px;transform:non
   <div class="ch-grid" style="margin-top:6px">
     <div class="ch-cell"><div class="k">当前环椭圆度</div><div class="v" id="chOval">—</div></div>
     <div class="ch-cell"><div class="k">本环环缝错台</div><div class="v" id="chJoint">—</div></div>
-    <div class="ch-cell" style="grid-column:span 3"><div class="k">臂端贴壁靶面半径 / 断面状态</div><div class="v" id="chProf">—</div></div>
+    <div class="ch-cell ch-profile"><div class="k">臂端贴壁靶面半径 / 断面状态</div><div class="v" id="chProf">—</div></div>
   </div>
-  <div class="ch-alert quiet" id="chAlert">本段未发现异常回波</div>
+    </details>
+    <div class="ch-alert quiet" id="chAlert" title="本段未发现异常回波">本段未发现异常回波</div>
+  </div>
 </div>
 
 <div id="ringFlash"></div>

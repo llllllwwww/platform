@@ -1,0 +1,63 @@
+/* 车载雷达 HUD：角落紧凑显示，完整指标按需展开；不影响三维相机与作业数据。 */
+body.embedded #carHud {
+  left: 12px;
+  right: auto;
+  bottom: 32px;
+  width: clamp(148px, calc(42vw - 24px), 216px);
+  max-width: calc(100vw - 24px);
+  max-height: none;
+  padding: 7px 8px;
+  transform: none;
+  overflow: hidden;
+  border: 1px solid rgba(86,217,177,.32);
+  border-radius: 10px;
+  background: rgba(11,20,30,.88);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 5px 18px rgba(0,0,0,.25);
+  font-variant-numeric: tabular-nums;
+}
+body.embedded #carHud [hidden] { display: none !important; }
+body.embedded #carHud .ch-top { gap: 6px; margin-bottom: 0; min-height: 20px; }
+body.embedded #carHud .ch-t { flex: 1; min-width: 0; color: #e8f0f7; font-size: 10px; font-weight: 600; letter-spacing: .2px; white-space: nowrap; }
+body.embedded #carHud .ch-rec { gap: 4px; font-size: 9px; letter-spacing: 0; }
+body.embedded #carHud .ch-rec i { width: 5px; height: 5px; box-shadow: none; }
+body.embedded #carHud .ch-toggle { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border: 1px solid rgba(86,217,177,.22); border-radius: 5px; background: rgba(86,217,177,.06); color: #9fb2c4; font: 15px/1 sans-serif; cursor: pointer; transition: color 200ms cubic-bezier(.22,1,.36,1), border-color 200ms cubic-bezier(.22,1,.36,1), background 200ms cubic-bezier(.22,1,.36,1); }
+body.embedded #carHud .ch-toggle:hover { color: #56d9b1; border-color: rgba(86,217,177,.5); background: rgba(86,217,177,.12); }
+body.embedded #carHud .ch-toggle:focus-visible,
+body.embedded #carHud summary:focus-visible { outline: 2px solid #56d9b1; outline-offset: 2px; border-radius: 4px; }
+body.embedded #carHud .ch-body { margin-top: 6px; max-height: min(290px, calc(100vh - 128px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(86,217,177,.35) transparent; }
+body.embedded #carHud #bscan { height: 56px; border-radius: 5px; border-color: rgba(86,217,177,.2); }
+body.embedded #carHud .ch-bar { gap: 5px; margin-top: 5px; font-size: 9px; line-height: 15px; }
+body.embedded #carHud .ch-bar .track { min-width: 12px; height: 4px; }
+body.embedded #carHud .ch-bar .track i { background: #56d9b1; }
+body.embedded #carHud .ch-bar b { min-width: 46px; color: #e8f0f7; font-size: 9px; }
+body.embedded #carHud .ch-details { margin-top: 5px; border-top: 1px solid rgba(86,217,177,.13); }
+body.embedded #carHud .ch-details summary { display: flex; align-items: center; gap: 5px; padding: 5px 0; color: #9fb2c4; font-size: 9px; line-height: 13px; cursor: pointer; list-style: none; }
+body.embedded #carHud .ch-details summary::-webkit-details-marker { display: none; }
+body.embedded #carHud .ch-details summary::after { content: "›"; color: #56d9b1; font: 15px/1 sans-serif; transform: rotate(90deg); }
+body.embedded #carHud .ch-details[open] summary::after { transform: rotate(-90deg); }
+body.embedded #carHud .ch-sp { margin-left: auto; color: #7f9bb5; font-size: 8px; white-space: nowrap; }
+body.embedded #carHud .ch-grid { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5px; margin-top: 5px; }
+body.embedded #carHud .ch-cell { min-width: 0; padding: 5px; border-color: rgba(86,217,177,.12); background: rgba(86,217,177,.035); }
+body.embedded #carHud .ch-cell .k { font-size: 8px; line-height: 12px; }
+body.embedded #carHud .ch-cell .v { font-size: 9px; line-height: 14px; }
+body.embedded #carHud .ch-profile { grid-column: 1 / -1; }
+body.embedded #carHud .ch-profile .v { white-space: normal; overflow-wrap: anywhere; }
+body.embedded #carHud .ch-alert { margin-top: 4px; padding: 3px 5px; font-size: 9px; line-height: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.embedded #carHud.is-minimized { padding-top: 5px; padding-bottom: 5px; }
+@media (min-width: 900px) {
+  body.embedded #carHud { width: 252px; }
+}
+@media (min-height: 620px) {
+  body.embedded #carHud #bscan { height: 82px; }
+}
+@media (max-height: 330px) {
+  body.embedded #carHud #bscan { height: 46px; }
+}
+@media (max-width: 340px) {
+  body.embedded #carHud { left: 8px; width: calc(50vw - 20px); padding-left: 6px; padding-right: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.embedded #carHud .ch-toggle { transition: none; }
+  body.embedded #carHud .ch-rec i { animation: none; }
+}

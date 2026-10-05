@@ -16,7 +16,7 @@
     return `<section class="panel video-monitor" id="videoMonitor" aria-label="检测车现场视频监测">
       <div class="panel-head"><h2>检测车作业场景 · 现场视频</h2><span class="badge blue">01 / 外部视频接入</span></div>
       <div class="panel-body">
-        <p class="monitor-intro">先接入检测车或现场摄像头的画面，再与下方仿真场景对照。录像回放和实时输入分别标明来源。</p>
+        <p class="monitor-intro">在同屏工作区左侧接入原始画面，与右侧仿真场景对照。录像回放和实时输入分别标明来源。</p>
         <div class="monitor-tabs" role="tablist" aria-label="视频接入方式">
           <button type="button" role="tab" id="monitorTabFile" aria-controls="monitorFilePane" aria-selected="true" data-monitor-mode="file" class="active">本地录像回放</button>
           <button type="button" role="tab" id="monitorTabNetwork" aria-controls="monitorNetworkPane" aria-selected="false" data-monitor-mode="network">网络监测源</button>
@@ -42,14 +42,16 @@
         <div class="monitor-screen" id="monitorScreen">
           <video id="monitorVideo" controls muted playsinline preload="metadata" aria-label="外部监测视频" hidden></video>
           <img id="monitorImage" alt="网络 MJPEG 监测画面" hidden>
-          <div class="monitor-empty" id="monitorEmpty"><svg viewBox="0 0 72 54" aria-hidden="true"><rect x="4" y="8" width="46" height="37" rx="7"/><path d="M50 19 68 12v30l-18-7M19 18l19 9-19 9z"/></svg><b>尚未接入现场视频</b><span>真实视频在这里显示，下方保留独立的仿真作业场景。</span></div>
+          <div class="monitor-empty" id="monitorEmpty"><svg viewBox="0 0 72 54" aria-hidden="true"><rect x="4" y="8" width="46" height="37" rx="7"/><path d="M50 19 68 12v30l-18-7M19 18l19 9-19 9z"/></svg><b>尚未接入现场视频</b><span>导入录像或连接摄像头，右侧保留仿真作业与对应病害。</span></div>
           <div class="monitor-overlay"><span class="badge" id="monitorSourceBadge">未接入</span><span id="monitorSourceName">无视频源</span></div>
         </div>
         <div class="monitor-status" role="status" aria-live="polite"><span class="monitor-status-dot" id="monitorStatusDot"></span><b id="monitorStatus">未接入</b><span id="monitorMessage"></span></div>
-        <div class="monitor-metadata"><div><small>任务 / 批次关联</small><b id="monitorContext"></b></div><div><small>画面尺寸</small><b id="monitorResolution">—</b></div><div><small>播放位置 / 时长</small><b id="monitorTime">—</b></div><div><small id="monitorFrameLabel">最近呈现帧 · 本机时间</small><b id="monitorLastFrame">—</b></div></div>
         <div class="monitor-actions">${button("截图取证", "capture")}${button("全屏画面", "fullscreen")}${button("重新连接", "reconnect")}${button("停止 / 释放视频源", "stop")}${button("下载接入记录", "record", "small subtle")}</div>
         <div class="monitor-feedback" id="monitorFeedback" role="alert" hidden></div>
+        <details class="monitor-details"><summary>来源、时间与接入说明</summary>
+        <div class="monitor-metadata"><div><small>任务 / 批次关联</small><b id="monitorContext"></b></div><div><small>画面尺寸</small><b id="monitorResolution">—</b></div><div><small>播放位置 / 时长</small><b id="monitorTime">—</b></div><div><small id="monitorFrameLabel">最近呈现帧 · 本机时间</small><b id="monitorLastFrame">—</b></div></div>
         <p class="monitor-boundary">现场视频用于观察和截图取证，暂未自动识别病害或驱动车辆。下方任务进度、机械臂动作、雷达与台账仍属于仿真演示；视频播放和仿真启停互不影响。</p>
+        </details>
       </div>
     </section>`;
   }
@@ -87,12 +89,12 @@
     const empty = $("#monitorEmpty");
     empty.hidden = ready;
     empty.querySelector("b").textContent = source ? (status === "连接失败" || status === "画面中断" ? "视频尚未就绪" : "等待视频画面") : "尚未接入现场视频";
-    empty.querySelector("span").textContent = source ? message || "接收到有效画面后才会显示已连接。" : "真实视频在这里显示，下方保留独立的仿真作业场景。";
+    empty.querySelector("span").textContent = source ? message || "接收到有效画面后才会显示已连接。" : "导入录像或连接摄像头，右侧保留仿真作业与对应病害。";
     empty.classList.toggle("loading", !!source && status === "连接中");
     $("[data-monitor-action=capture]").disabled = !ready;
     $("[data-monitor-action=stop]").disabled = !source && status !== "连接中";
     $("[data-monitor-action=reconnect]").disabled = !reconnectSource;
-    document.dispatchEvent(new CustomEvent("tunnel-monitor-state", {detail: {active: !!source && ready, kind: source?.kind || null, status}}));
+    document.dispatchEvent(new CustomEvent("tunnel-monitor-state", {detail: {active: !!source && ready, kind: source?.kind || null, status, sourceId: source?.evidenceId || null, timeSec: source?.kind === "file" || source?.nature === "recording" ? video.currentTime : null, durationSec: Number.isFinite(video.duration) ? video.duration : null}}));
   }
   function cancelFrameWatch() {
     const video = $("#monitorVideo");
@@ -177,6 +179,20 @@
     reconnectSource = input;
     const expected = token;
     source = {...input, name: input.kind === "file" ? input.file.name : input.kind === "camera" ? "摄像头 / 采集卡" : new URL(input.url).origin + new URL(input.url).pathname};
+    source.evidenceId = input.kind === "file" ? null : "VS-" + stamp() + "-" + Math.random().toString(36).slice(2,9);
+    source.identityBasis = input.kind === "file" ? "SHA-256 整文件校验" : "本次接入会话（不能跨会话冒用）";
+    if(input.kind === "file") {
+      const original = source;
+      (async()=>{
+        const partial=input.file.size>128*1024*1024;
+        const bytes=partial?await new Blob([String(input.file.size),input.file.slice(0,1048576),input.file.slice(-1048576)]).arrayBuffer():await input.file.arrayBuffer();
+        if(!crypto.subtle)throw Error("当前浏览器不支持来源校验，请使用本地启动器");
+        const hash=await crypto.subtle.digest("SHA-256",bytes);
+        if(expected!==token||source!==original)return;
+        source.evidenceId="VF-"+[...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,"0")).join("");
+        source.identityBasis=partial?"首尾采样 SHA-256 与文件大小（非整文件校验）":"SHA-256 整文件校验";refresh();
+      })().catch(()=>{if(source===original)source.identityBasis="来源校验失败，不能建立现场对应证据";});
+    }
     sessionStart = stamp();
     alertMessage("");
     log("开始接入");
@@ -375,5 +391,21 @@
     }
   }
   window.addEventListener("pagehide", () => release());
-  window.TunnelVideoMonitor = {mount, beforeRender};
+  function evidenceSnapshot() {
+    if(!source||!ready)throw Error("先接入并解码现场视频，再冻结证据帧");
+    if(!source.evidenceId)throw Error("视频来源正在校验，请稍后再冻结证据帧");
+    const video=$("#monitorVideo"), image=$("#monitorImage"), picture=source.format==="mjpeg"?image:video;
+    const width=source.format==="mjpeg"?image.naturalWidth:video.videoWidth,height=source.format==="mjpeg"?image.naturalHeight:video.videoHeight;
+    const cv=document.createElement("canvas");cv.width=Math.min(640,width);cv.height=Math.round(cv.width*height/width);
+    cv.getContext("2d").drawImage(picture,0,0,cv.width,cv.height);
+    let thumbnail;try{thumbnail=cv.toDataURL("image/jpeg",.72);}catch{throw Error("此视频跨域取帧受限，不能生成对应证据；请使用允许取帧的源或本地录像");}
+    return {kind:"video",sourceId:source.evidenceId,sourceName:source.name,batchId:context.batchId,taskId:context.taskId,width,height,timeSec:source.kind==="file"||source.nature==="recording"?video.currentTime:null,durationSec:Number.isFinite(video.duration)?video.duration:null,frameAt:stamp(),thumbnail,identityBasis:source.identityBasis,nature:source.kind==="file"||source.nature==="recording"?"recording":"live"};
+  }
+  function evidenceIdentity(){return {sourceId:source?.evidenceId||null,batchId:context?.batchId,taskId:context?.taskId,ready};}
+  function seekEvidence(anchor){
+    if(!ready||anchor.sourceId!==source?.evidenceId||anchor.taskId!==context.taskId||anchor.batchId!==context.batchId)throw Error("请重新导入该证据的原视频；当前视频来源或任务不匹配");
+    if(anchor.timeSec===null)throw Error("实时证据没有可拖动的录像时间，请查看保存的证据帧");
+    const video=$("#monitorVideo");video.pause();video.currentTime=anchor.timeSec;refresh();
+  }
+  window.TunnelVideoMonitor = {mount, beforeRender, evidenceSnapshot, evidenceIdentity, seekEvidence};
 })();
