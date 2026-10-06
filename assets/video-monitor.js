@@ -16,7 +16,7 @@
     return `<section class="panel video-monitor" id="videoMonitor" aria-label="检测车现场视频监测">
       <div class="panel-head"><h2>检测车作业场景 · 现场视频</h2><span class="badge blue">01 / 外部视频接入</span></div>
       <div class="panel-body">
-        <p class="monitor-intro">在同屏工作区左侧接入原始画面，与右侧仿真场景对照。录像回放和实时输入分别标明来源。</p>
+        <p class="monitor-intro">在同屏工作区左侧接入原始画面，与右侧三维作业场景对照。录像回放和实时输入分别标明来源。</p>
         <div class="monitor-tabs" role="tablist" aria-label="视频接入方式">
           <button type="button" role="tab" id="monitorTabFile" aria-controls="monitorFilePane" aria-selected="true" data-monitor-mode="file" class="active">本地录像回放</button>
           <button type="button" role="tab" id="monitorTabNetwork" aria-controls="monitorNetworkPane" aria-selected="false" data-monitor-mode="network">网络监测源</button>
@@ -42,7 +42,7 @@
         <div class="monitor-screen" id="monitorScreen">
           <video id="monitorVideo" controls muted playsinline preload="metadata" aria-label="外部监测视频" hidden></video>
           <img id="monitorImage" alt="网络 MJPEG 监测画面" hidden>
-          <div class="monitor-empty" id="monitorEmpty"><svg viewBox="0 0 72 54" aria-hidden="true"><rect x="4" y="8" width="46" height="37" rx="7"/><path d="M50 19 68 12v30l-18-7M19 18l19 9-19 9z"/></svg><b>尚未接入现场视频</b><span>导入录像或连接摄像头，右侧显示仿真作业与对应疑似位置。</span></div>
+          <div class="monitor-empty" id="monitorEmpty"><svg viewBox="0 0 72 54" aria-hidden="true"><rect x="4" y="8" width="46" height="37" rx="7"/><path d="M50 19 68 12v30l-18-7M19 18l19 9-19 9z"/></svg><b>尚未接入现场视频</b><span>导入录像或连接摄像头，右侧显示三维作业对照与对应疑似位置。</span></div>
           <div class="monitor-overlay"><span class="badge" id="monitorSourceBadge">未接入</span><span id="monitorSourceName">无视频源</span></div>
         </div>
         <div class="monitor-status" role="status" aria-live="polite"><span class="monitor-status-dot" id="monitorStatusDot"></span><b id="monitorStatus">未接入</b><span id="monitorMessage"></span></div>
@@ -89,7 +89,7 @@
     const empty = $("#monitorEmpty");
     empty.hidden = ready;
     empty.querySelector("b").textContent = source ? (status === "连接失败" || status === "画面中断" ? "视频尚未就绪" : "等待视频画面") : "尚未接入现场视频";
-    empty.querySelector("span").textContent = source ? message || "接收到有效画面后才会显示已连接。" : "导入录像或连接摄像头，右侧显示仿真作业与对应疑似位置。";
+    empty.querySelector("span").textContent = source ? message || "接收到有效画面后才会显示已连接。" : "导入录像或连接摄像头，右侧显示三维作业对照与对应疑似位置。";
     empty.classList.toggle("loading", !!source && status === "连接中");
     $("[data-monitor-action=capture]").disabled = !ready;
     $("[data-monitor-action=stop]").disabled = !source && status !== "连接中";

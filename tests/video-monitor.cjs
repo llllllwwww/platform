@@ -18,7 +18,7 @@ fs.mkdirSync(out, { recursive: true });
     await page.goto('http://127.0.0.1:8765/index.html#tasks');
     await page.waitForSelector('#videoMonitor');
     const order = await page.locator('.task-page-layout .panel-head h2').allTextContents();
-    assert.deepEqual(order.slice(0,5), ['项目设备示意','检测车作业场景 · 现场视频','现场疑似位置 · 视频 / 雷达 ↔ 仿真 ↔ 孪生','检测车作业场景 · 仿真演示','任务列表']);
+    assert.deepEqual(order.slice(0,5), ['项目设备示意','检测车作业场景 · 现场视频','现场疑似位置 · 视频 / 雷达 ↔ 仿真 ↔ 孪生','检测车作业场景 · 三维作业对照','任务列表']);
     assert.equal(await page.locator('#monitorEmpty').isVisible(),true);
     pass('设备折叠区、左右对照工作区、病害对应和任务列表完整，空状态正确');
     const fixturePage=await context.newPage();

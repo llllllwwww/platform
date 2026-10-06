@@ -95,12 +95,12 @@ const near=(a,b,eps=1e-6)=>assert(Math.abs(a-b)<eps,`${a} != ${b}`);
   await page.locator('#evidenceTrace').fill('1');await page.locator('#evidenceSample').fill('1');await page.locator('[data-evidence-action="pick-radar"]').click();await page.locator('#evidenceType').selectOption('void');
   const before=(await snapshot()).evidenceRecords.length;await page.locator('#evidenceSave').click();await page.waitForFunction(n=>SLZJ.snapshot().evidenceRecords.length===n+1,before);
   const rr=(await snapshot()).evidenceRecords.at(-1);assert.equal(rr.anchors[0].trace,1);assert.equal(rr.anchors[0].sample,1);near(rr.mileage,3144);near(rr.depth,.175);
-  assert((await page.locator('#radarSimulation').innerText()).includes('同源病害对应复核'));
-  pass('雷达道号/采样点按同一规则进入仿真与孪生，支持相对位置');
-  for(const id of ['externalRawRadar','rawRadar']){
+  assert.equal(await page.locator('#radarSimulation').count(),0);
+  pass('雷达道号/采样点按同一规则进入外部复核与孪生，支持相对位置');
+  for(const id of ['externalRawRadar']){
    const marked=await page.locator('#'+id).evaluate(c=>{const pixel=c.getContext('2d').getImageData(Math.floor(45+583/3+6),Math.floor(12+201/2-1),3,3).data;for(let i=0;i<pixel.length;i+=4)if(pixel[i]>220&&pixel[i+1]<180&&pixel[i+2]<180)return true;return false;});assert(marked,'同源标注未绘制到 '+id);
-  }pass('外部剖面和对应复核剖面的同一道/采样点绘制相同病害标记');
-  await page.locator('#radarSimulation').screenshot({path:path.join(out,'同源雷达病害对应.png')});
+  }pass('外部剖面的同一道/采样点绘制病害标记');
+  await page.locator('#radarAcquisition').screenshot({path:path.join(out,'同源雷达病害对应.png')});
   await page.locator('#evidenceList [data-evidence-action="edit"]').last().click();await page.locator('#evidenceType').selectOption('water');await page.locator('[data-evidence-action="update"]').click();
   await page.locator('#navigation a[href="#twin"]').click();await page.locator('#evidenceUnfold').waitFor();await page.waitForFunction(id=>document.querySelector('#twinFrame')?.contentWindow?.SLZJScene?.snapshot().visibleIds.includes(id),rr.id);
   const rp=(await scene()).positions.find(p=>p.id===rr.id);assert.equal(rp.type,'water');near(rp.x,16);pass('修改雷达病害类型同时更新对应标记和第三模块');

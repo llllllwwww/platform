@@ -190,7 +190,7 @@
       tone: "blue",
       description: "负责衬砌内部回波采集和测线记录，平台用 B-scan、单道波形与 CSV 目录展示接入边界。",
       specs: ["输入：矩形数值矩阵", "元数据：道间距 / 采样间隔", "输出：B-scan、单道和来源记录"],
-      platform: "雷达数据管理 → 导入 CSV + JSON；当前示意信号与真实设备格式分开标识。",
+      platform: "雷达数据管理 → 导入 CSV + JSON；程序雷达样本统一在第四模块管理。",
     },
     {
       id: "vision",
@@ -495,12 +495,11 @@
   }
   function evidenceContext(){const t=task();return {batchId:state.batch,taskId:t.id,start:t.start,end:t.end};}
   function evidenceActive(){return ["tasks","twin"].includes(route)&&window.TunnelEvidenceCore.mode(state,evidenceContext())==="evidence";}
-  function radarCorrespondenceData(){const context=evidenceContext(),r=state.radars[selectedRadar];return route==="radar"&&window.TunnelEvidenceCore.mode(state,context)==="evidence"&&radarMode==="import"&&r?.batchId===context.batchId&&r.taskId===context.taskId?r:null;}
   function refreshEvidenceViews(){
     const needsTwinLayout=route==="twin"&&(evidenceActive()!==!!$("#evidenceUnfold"));
     if(route==="radar"||needsTwinLayout)render();else {window.TunnelEvidenceLink.refresh();drawCanvases();}
     syncScene();
-    const badge=$("#taskSceneDataBadge");if(badge){badge.textContent=evidenceActive()?"02 / 同源疑似点 · 顺序位置对应":"02 / 仿真作业 · 演示";badge.className="badge "+(evidenceActive()?"mint":"amber");}
+    const badge=$("#taskSceneDataBadge");if(badge){badge.textContent=evidenceActive()?"02 / 同源疑似点 · 顺序位置对应":"01 / 三维作业对照 · 参考";badge.className="badge "+(evidenceActive()?"mint":"amber");}
     if(evidenceActive())$("#dataBadge").textContent="现场标注 · 相对位置对应";
     $$('[data-action="step-defect"]').forEach(button=>{button.textContent=(button.dataset.dir==="-1"?"上一":"下一")+(evidenceActive()?"疑似点":"病害");});
     $$("[data-scene-data]").forEach(badge=>{badge.textContent=evidenceActive()?"疑似位置 · 仿真":"数字孪生 · 演示";});
@@ -681,7 +680,7 @@
         btn("新建检测任务", "new-task", "primary"),
       ) +
       moduleTabs() +
-      `<details class="task-drawer task-equipment-drawer" id="taskEquipmentDrawer" ${taskPanels.equipment ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("tasks")}</span><span><b>设备配置与项目示意</b><small>检测车 · 雷达 · 影像 · 定位 · 边缘终端 · 安全保障</small></span><span class="badge mint">6 类设备</span></summary><div class="task-drawer-body">${equipmentPanel()}</div></details><section class="task-workspace" aria-label="现场视频与仿真左右对照"><div class="task-workspace-head"><div><span class="task-workspace-kicker">LIVE VIDEO / DIGITAL TWIN</span><h2>现场与仿真 · 同屏对照</h2><p>${escape(t.name)}<span> / </span>${mile(t.start)} — ${mile(t.end)}</p></div><div class="task-workspace-actions">${btn("冻结视频并标记", "task-capture-video", "primary", 'disabled id="taskCaptureVideo"')}${btn("疑似位置与对应", "task-evidence", "subtle")}${btn("作业参数", "task-parameters", "subtle")}</div></div><div id="taskPositionReviewMount"></div><div class="task-comparison-grid" id="taskComparison"><div class="task-video-pane"><div id="liveMonitorMount"></div><details class="task-drawer task-evidence-drawer" id="taskEvidenceDrawer" ${taskPanels.evidence || state.pendingVideoEvidence ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("defects")}</span><span><b>疑似位置与对应</b><small>冻结原帧、记录疑似位置与顺序、查看对应证据</small></span><span class="badge mint" id="taskEvidenceCount">${evidenceTotal} 条记录</span></summary><div class="task-drawer-body"><div id="evidenceMount"></div></div></details></div><aside class="task-simulation-pane" aria-label="对应仿真作业场景">${panel("检测车作业场景 · 仿真演示", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, evidenceActive()?'<span class="badge mint" id="taskSceneDataBadge">02 / 同源疑似点 · 顺序位置对应</span>':'<span class="badge amber" id="taskSceneDataBadge">02 / 仿真作业 · 演示</span>', false)}</aside></div></section><div class="grid-main task-configuration" id="taskConfiguration"><div>${panel(
+      `<details class="task-drawer task-equipment-drawer" id="taskEquipmentDrawer" ${taskPanels.equipment ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("tasks")}</span><span><b>设备配置与项目示意</b><small>检测车 · 雷达 · 影像 · 定位 · 边缘终端 · 安全保障</small></span><span class="badge mint">6 类设备</span></summary><div class="task-drawer-body">${equipmentPanel()}</div></details><section class="task-workspace" aria-label="现场视频与三维作业对照"><div class="task-workspace-head"><div><span class="task-workspace-kicker">LIVE VIDEO / DIGITAL TWIN</span><h2>现场视频与三维作业对照</h2><p>${escape(t.name)}<span> / </span>${mile(t.start)} — ${mile(t.end)}</p></div><div class="task-workspace-actions">${btn("冻结视频并标记", "task-capture-video", "primary", 'disabled id="taskCaptureVideo"')}${btn("疑似位置与对应", "task-evidence", "subtle")}${btn("作业参数", "task-parameters", "subtle")}</div></div><div id="taskPositionReviewMount"></div><div class="task-comparison-grid" id="taskComparison"><div class="task-video-pane"><div id="liveMonitorMount"></div><details class="task-drawer task-evidence-drawer" id="taskEvidenceDrawer" ${taskPanels.evidence || state.pendingVideoEvidence ? "open" : ""}><summary class="task-drawer-summary"><span class="task-drawer-icon">${icon("defects")}</span><span><b>疑似位置与对应</b><small>冻结原帧、记录疑似位置与顺序、查看对应证据</small></span><span class="badge mint" id="taskEvidenceCount">${evidenceTotal} 条记录</span></summary><div class="task-drawer-body"><div id="evidenceMount"></div></div></details></div><aside class="task-simulation-pane" aria-label="对应仿真作业场景">${panel("检测车作业场景 · 三维作业对照", scene(true) + `<div class="panel-body"><div class="progress-label"><span id="taskStatus">${escape(t.name)} · ${statusTask(t.status)}</span><span id="taskPercent">${fmt(t.progress * 100)}%</span></div><div class="progress"><span id="taskBar" style="width:${t.progress * 100}%"></span></div><div class="actions">${btn(taskRunning ? "暂停作业" : "开始 / 继续", "toggle-task", "primary")}${btn("重置进度", "reset-task", "subtle")}<span class="muted" id="taskDistance">已行驶 ${fmt(t.progress * (t.end - t.start))} m</span><a href="#radar" style="margin-left:auto">查看雷达数据 →</a></div></div>`, evidenceActive()?'<span class="badge mint" id="taskSceneDataBadge">02 / 同源疑似点 · 顺序位置对应</span>':'<span class="badge amber" id="taskSceneDataBadge">02 / 仿真作业 · 演示</span>', false)}</aside></div></section><div class="grid-main task-configuration" id="taskConfiguration"><div>${panel(
         "任务列表",
         `<div class="table-wrap"><table><thead><tr><th>任务</th><th>检测范围</th><th>速度</th><th>进度</th><th>状态</th><th>操作</th></tr></thead><tbody>${batchTasks()
           .map(
@@ -751,10 +750,14 @@
     return `<div class="table-wrap"><table><thead><tr><th>数据 / 任务 / 测线</th><th>接入方式与来源声明</th><th>矩阵 / 标定</th><th>操作</th></tr></thead><tbody>${entries.map(({r,i})=>`<tr><td>${escape(r.name)}<br><small class="muted">${escape(r.taskId || "未关联任务")} / ${escape(r.lineId || r.metadata?.lineId || "未提供测线")}</small></td><td>${radarTransportLabel(r)}<br><small class="muted">${escape(r.provenance?.declaredSource || r.metadata?.source || "真实性未核验")}</small></td><td>${r.rows} × ${r.cols}<br><small class="muted">${r.warnings.length ? "有来源或标定提示" : "标定字段完整（未核验）"}</small></td><td>${btn("选为处理输入", "use-radar", "small", `data-id="${i}"`)}</td></tr>`).join("")}</tbody></table></div>`;
   }
   function radarPage() {
-    const r=radarCorrespondenceData() || radarDemoData();
-    return heading("雷达数据管理", "先接入外部原始矩阵与网关数据帧，再对照独立仿真示例；保存的快照可送入智能处理。", "01 / 对应计划第 1 部分",
-      btn("下载 CSV 样例", "sample-csv", "subtle")+btn("进入智能处理", "go-processing", "primary")) + moduleTabs() +
-      `<div id="radarAcquisitionMount"></div><div id="evidenceMount"></div><div id="radarSimulation">${panel(radarCorrespondenceData()?"雷达信号 · 同源病害对应复核":"雷达信号 · 仿真演示", radarControls(true)+`<div class="radar-wrap"><canvas id="rawRadar" aria-label="仿真B-scan雷达图"></canvas></div><div class="radar-caption"><span>${escape(r.name)}</span><span>${radarCorrespondenceData()?"同源固定矩阵 / 人工病害定位":"程序示意信号"} · ${r.rows} 点 × ${r.cols} 道</span></div><div class="radar-wrap wave"><canvas id="wave" aria-label="仿真单道波形"></canvas></div><div class="radar-caption"><span>单道 #<span id="traceNumber">${trace}</span> · 示意归一化振幅</span><span>点击剖面可切换单道</span></div>${note(r.warnings.join(" "), "info")}<div class="table-wrap"><table><thead><tr><th>数据</th><th>来源</th><th>矩阵</th><th>状态</th></tr></thead><tbody><tr><td>${radarCorrespondenceData()?escape(r.name):"L-01 / L-02 / L-03"}</td><td>${radarCorrespondenceData()?"同源固定快照 / 现场人工标注":"病害参数派生示意"}</td><td>${r.rows} × ${r.cols}</td><td>${radarCorrespondenceData()?"位置对应复核（非雷达物理求解）":"可预览"}</td></tr></tbody></table></div>`, radarCorrespondenceData()?'<span class="badge mint">02 / 同一快照 · 对应示意</span>':'<span class="badge amber">02 / 仿真数据 · 演示</span>')}</div>`;
+    return heading(
+      "雷达数据管理",
+      "接入外部原始矩阵或网关数据帧，保存快照后进入处理；雷达仿真样本统一放在第四模块。",
+      "01 / 对应计划第 1 部分",
+      btn("下载 CSV 样例", "sample-csv", "subtle") +
+        btn("进入智能处理", "go-processing", "primary"),
+    ) + moduleTabs() +
+      `<div id="radarAcquisitionMount"></div><div id="evidenceMount"></div>`;
   }
   function processingPage() {
     const r = radarData(),
@@ -1226,12 +1229,14 @@
     };
   }
   function drawCanvases() {
-    const r = route === "radar" ? (radarCorrespondenceData() || radarDemoData()) : radarData();
-    paintRadar($("#rawRadar"), r.matrix, true, palette, r.metadata);
-    if(route === "radar" && radarCorrespondenceData()) window.TunnelEvidenceLink.overlay($("#rawRadar"),r,state,evidenceContext());
-    if (r.source === "demo" && overlayRegions && $("#rawRadar"))
-      drawRoi($("#rawRadar"), chosen());
-    drawWave($("#wave"), r);
+    const r = radarData();
+    const rawCanvas = $("#rawRadar");
+    if (rawCanvas) {
+      paintRadar(rawCanvas, r.matrix, true, palette, r.metadata);
+      if (r.source === "demo" && overlayRegions) drawRoi(rawCanvas, chosen());
+    }
+    const waveCanvas = $("#wave");
+    if (waveCanvas) drawWave(waveCanvas, r);
     if ($("#processedRadar") && processed)
       paintRadar(
         $("#processedRadar"),
@@ -1265,7 +1270,6 @@
         if ($("#trace")) $("#trace").value = trace;
         if ($("#traceNumber")) $("#traceNumber").textContent = trace;
         paintRadar(cv, r.matrix, true, palette, r.metadata);
-        if(route === "radar" && radarCorrespondenceData()) window.TunnelEvidenceLink.overlay(cv,r,state,evidenceContext());
         if (r.source === "demo" && overlayRegions) drawRoi(cv, chosen());
         drawWave($("#wave"), r);
       };
@@ -1389,7 +1393,7 @@
       [
         "radar",
         "检查雷达数据",
-        "先导入外部矩阵或接收网关帧，保存为处理快照；下方保留独立示意信号。",
+        "先导入外部矩阵或接收网关帧，保存为处理快照；雷达仿真样本统一从仿真验证工作台进入。",
       ],
       [
         "processing",
@@ -2138,7 +2142,7 @@
       }
       if (el.id === "trace") {
         const n = Number(el.value);
-        if (!Number.isInteger(n) || n < 0 || n >= (route === "radar" ? radarDemoData() : radarData()).cols)
+        if (!Number.isInteger(n) || n < 0 || n >= radarData().cols)
           throw Error("道号超出有效范围。");
         trace = n;
         drawCanvases();
