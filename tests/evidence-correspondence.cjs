@@ -1,11 +1,13 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const out=path.resolve(__dirname,'output'),videos=process.env.PUBLIC_VIDEO_DIR||path.join(out,'public-videos');
+const out=path.resolve(__dirname,'output'),published=path.resolve(__dirname,'../assets/videos');
+const videos=process.env.PUBLIC_VIDEO_DIR||published;
+const videoFile=name=>{const primary=path.join(videos,name);return !process.env.PUBLIC_VIDEO_DIR&&!fs.existsSync(primary)?path.join(out,'public-videos',name):primary;};
 const cases=require('./tunnel-video-cases.json').map(c=>({...c,file:c.playbackFile||c.file}));
 const expectedVideos=cases.length*3;
 const near=(a,b,eps=1e-6)=>assert(Math.abs(a-b)<eps,`${a} != ${b}`);
 (async()=>{
- for(const c of cases)if(!fs.existsSync(path.join(videos,c.file)))throw Error('请先运行 python tests/download_public_videos.py 下载公开验证素材');
- const manifest=JSON.parse(fs.readFileSync(path.join(videos,'sources.json'),'utf8'));
+ for(const c of cases)if(!fs.existsSync(videoFile(c.file)))throw Error('请先运行 python tests/download_public_videos.py 下载公开验证素材');
+ const manifest=JSON.parse(fs.readFileSync(videoFile('sources.json'),'utf8'));
  const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:1440,height:1050},acceptDownloads:true}),checks=[],errors=[],videoResults=[];
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
@@ -30,7 +32,7 @@ const near=(a,b,eps=1e-6)=>assert(Math.abs(a-b)<eps,`${a} != ${b}`);
   let lastIds=[];
   for(const c of cases){
    const source=manifest.find(x=>(x.playbackFile||x.file)===c.file);assert(source);
-   await page.locator('#monitorFile').setInputFiles(path.join(videos,c.file));
+   await page.locator('#monitorFile').setInputFiles(videoFile(c.file));
    await page.waitForFunction(()=>TunnelVideoMonitor.evidenceIdentity().ready&&TunnelVideoMonitor.evidenceIdentity().sourceId?.startsWith('VF-'));
    const identity=await page.evaluate(()=>TunnelVideoMonitor.evidenceIdentity().sourceId);assert.equal(identity,'VF-'+(source.playbackSha256||source.sha256));
    pass('公开视频真实解码且SHA-256匹配：'+c.file);

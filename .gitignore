@@ -22,7 +22,7 @@ __pycache__/
 # Node
 node_modules/
 
-# 大体积二进制/媒体文件（本仓库只托管平台代码与文档）
+# 本地媒体与大体积文件；下方仅放行四个指定的隧道演示素材
 *.pptx
 *.ppt
 *.mp4
@@ -33,6 +33,12 @@ node_modules/
 *.rar
 *.pem
 *.key
+
+# 随平台发布的公开隧道视频，用户导入的其他录像仍忽略
+!/assets/videos/metro-tunnel-scan-equipment.mp4
+!/assets/videos/metro-tunnel-scan-follow.mp4
+!/assets/videos/highway-tunnel-gpr.mp4
+!/assets/videos/highway-tunnel-gpr-h264.mp4
 
 # 本地浏览器验收输出
 tests/output/

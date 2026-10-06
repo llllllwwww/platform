@@ -2,7 +2,8 @@
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const fixture=require('./tunnel-video-cases.json').find(c=>c.uiExample),points=fixture.points;
-const out=path.join(__dirname,'output'),file=path.join(out,'public-videos',fixture.playbackFile||fixture.file);
+const out=path.join(__dirname,'output'),published=path.join(__dirname,'..','assets','videos',fixture.playbackFile||fixture.file);
+const file=fs.existsSync(published)?published:path.join(out,'public-videos',fixture.playbackFile||fixture.file);
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),checks=[],errors=[];
