@@ -1,17 +1,20 @@
 """隧雷智检本地启动器：仅监听回环地址，不接收互联网连接，不上传数据。"""
 from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 import argparse
 import threading
 import webbrowser
+
+from video_inference_service import LocalWorkBenchHandler, VideoInferenceService
 
 parser = argparse.ArgumentParser(description='启动隧雷智检本地工作台')
 parser.add_argument('--port', type=int, default=8765)
 parser.add_argument('--no-browser', action='store_true')
 args = parser.parse_args()
 root = Path(__file__).resolve().parent
-handler = partial(SimpleHTTPRequestHandler, directory=str(root))
+inference_service = VideoInferenceService(root)
+handler = partial(LocalWorkBenchHandler, directory=str(root), service=inference_service)
 try:
     server = ThreadingHTTPServer(('127.0.0.1', args.port), handler)
 except OSError as exc:
@@ -27,3 +30,4 @@ except KeyboardInterrupt:
     pass
 finally:
     server.server_close()
+    inference_service.pool.shutdown(wait=False, cancel_futures=True)

@@ -46,3 +46,5 @@ tests/output/
 # 本地智能代理与可选视频重建环境的临时产物
 .workbuddy/
 algorithm/video_reconstruction/pip-*/
+# 本地视频推理运行目录（上传视频、抽帧、掩码和复核 JSON）
+runtime/

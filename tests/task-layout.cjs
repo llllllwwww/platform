@@ -19,6 +19,7 @@ const near = (a,b,eps=1) => assert(Math.abs(a-b)<=eps,`${a} 与 ${b} 相差超�
     const context = await browser.newContext({viewport:{width:1440,height:1000}, reducedMotion:'reduce'});
     await context.grantPermissions(['camera'],{origin:'http://127.0.0.1:8765'});
     const page = await context.newPage();
+    await page.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
     page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message);});
     await page.goto('http://127.0.0.1:8765/index.html#tasks');
     await page.waitForFunction(()=>document.querySelector('#twinFrame')?.contentWindow?.SLZJScene,null,{timeout:60000});

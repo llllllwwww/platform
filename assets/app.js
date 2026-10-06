@@ -61,6 +61,7 @@
   state.maintenance = state.maintenance || [];
   state.simulation = state.simulation || {};
   state.processing = state.processing || {};
+  state.videoInferenceJobs = state.videoInferenceJobs || {};
   // 清理已经移除的识别模型选择；保留输入、数值处理结果与其他业务数据。
   function clearRetiredModelChoice(record) {
     if (!record || typeof record !== "object") return false;
@@ -199,9 +200,9 @@
       role: "前视相机 · 补光 · 候选证据",
       status: "复核链路",
       tone: "mint",
-      description: "采集隧道表面影像、同帧画面和邻帧证据，为第二模块的影像三维复核提供来源。",
+      description: "采集隧道表面影像、同帧画面和邻帧证据，为第二模块的多相机候选复核提供来源。",
       specs: ["视图：前视 / 鱼眼示意", "证据：原始帧 / 掩码 / 邻帧", "用途：候选复核，不等于确诊"],
-      platform: "检测采集 → 现场视频接入；智能解析 → 病害清单与隧道影像三维复核。",
+      platform: "检测采集 → 现场视频接入；智能解析 → Python 候选复核与多相机建模。",
     },
     {
       id: "pose",
@@ -465,13 +466,51 @@
     <div class="scene-tools">${check("stars", "星空背景")}${check("city", "城市背景")}<label>衬砌透明度<input aria-label="衬砌透明度" id="opacity" type="range" min="0.05" max="0.8" step="0.05" value="${pref.opacity}"></label><label>纵向剖切<input aria-label="纵向剖切" id="cut" type="range" min="0" max="48" step="0.5" value="${pref.cut ?? 48}"></label><label class="background-upload">本地背景图片 <input type="file" id="backgroundImage" accept="image/png,image/jpeg,image/webp" aria-label="选择本地背景图片"></label>${btn("恢复默认背景", "restore-background", "small subtle")}</div>
      <div class="scene-shortcuts">自由漫游：W/A/S/D 移动，Q/E 升降，Shift 加速；第一人称：鼠标环视、空格切换扫掠，Esc 退出。暂停只冻结作业，相机仍可操作。图片仅在本地读取。</div></details>`;
   }
+  function inferenceKey(batchId, taskId) {
+    return `${batchId || state.batch}::${taskId || task().id}`;
+  }
+  function currentVideoInference() {
+    const t = task();
+    const jobs = state.videoInferenceJobs || {};
+    return jobs[inferenceKey(state.batch, t.id)] || null;
+  }
+  function inferenceStatus(job) {
+    return ({ uploading: "上传中", queued: "排队中", running: "Python 推理中", completed: "已完成", failed: "推理失败", cancelled: "已取消" })[job?.status] || "尚未启动";
+  }
+  function videoInferenceStatusMarkup(job, compact = false) {
+    if (!job) return `<div id="videoInferenceStatus" class="video-inference-empty"><span class="inference-pulse"></span><div><b>等待现场视频</b><small>在 01 检测采集导入本地录像后，这里会自动上传到本机服务并启动 Python 裂缝候选推理。</small></div></div>`;
+    const progress = Math.max(0, Math.min(100, Number(job.progress?.percent || 0)));
+    const p = job.progress || {};
+    const result = job.result || {};
+    const success = job.status === "completed";
+    const failed = job.status === "failed";
+    return `<div id="videoInferenceStatus" class="video-inference-status ${success ? "is-complete" : failed ? "is-failed" : "is-running"}">
+      <div class="inference-status-head"><div><span class="status-kicker">PYTHON / LOCAL INFERENCE</span><strong>${escape(inferenceStatus(job))}</strong><small>${escape(job.filename || "现场视频")}</small></div><span class="badge ${success ? "mint" : failed ? "coral" : "amber"}">${Math.round(progress)}%</span></div>
+      <div class="inference-progress"><span style="width:${progress}%"></span></div>
+      <div class="inference-stats"><span><b>${escape(p.phase || "准备中")}</b><small>当前阶段</small></span><span><b>${p.frames || 0}${p.totalFrames ? ` / ${p.totalFrames}` : ""}</b><small>代表帧</small></span><span><b>${result.candidateCount ?? p.candidates ?? 0}</b><small>裂缝候选</small></span></div>
+      ${failed ? `<div class="note warning inference-error">${escape(job.error || "Python 推理失败，请检查算法环境和视频格式。")}</div>` : ""}
+      ${success ? `<div class="inference-result-line"><span>结果已写入“多相机建模与裂缝候选复核”</span><span class="muted">${result.frameCount || 0} 帧 · ${result.candidateCount || 0} 个候选</span></div>` : ""}
+      ${compact ? `<div class="actions inference-actions">${btn("打开候选复核", "open-video-inference", "primary")}${success && result.jsonUrl ? `<a class="btn subtle" href="${escape(result.jsonUrl)}" target="_blank" rel="noopener">查看 JSON ↗</a>` : ""}</div>` : ""}
+    </div>`;
+  }
+  function videoInferenceReviewMarkup(job) {
+    if (!job) return `<section id="videoInferenceReview" class="video-inference-review"><div class="inference-review-empty"><span class="inference-pulse"></span><div><b>尚未有本次视频推理结果</b><p>请先到“01 检测采集 → 检测任务与设备”导入现场视频；推理完成后，候选帧、掩码和叠加图会自动出现在这里。</p></div></div></section>`;
+    const result = job.result || {};
+    const preview = Array.isArray(result.preview) ? result.preview : [];
+    const cards = preview.length ? preview.map((item) => `<figure class="inference-candidate-card"><img loading="lazy" src="${escape(item.overlayUrl || item.frameUrl || "")}" alt="${escape(item.imageName || "候选帧")}"/><figcaption><b>${escape(item.id || "候选观测")}</b><span>${item.timeSec == null ? "时间不可用" : fmt(item.timeSec, 2) + " s"} · 置信度 ${fmt(Number(item.confidence || 0), 3)}</span><small>${escape(item.imageName || "")}</small></figcaption></figure>`).join("") : `<div class="empty"><b>当前没有候选区域</b>模型已完成 ${result.frameCount || 0} 帧推理，可打开 JSON 查看完整逐帧结果。</div>`;
+    return `<section id="videoInferenceReview" class="video-inference-review ${job.status === "completed" ? "is-complete" : job.status === "failed" ? "is-failed" : "is-running"}">
+      <div class="inference-review-head"><div><span class="status-kicker">LATEST UPLOAD / ${escape(job.taskId || "TASK")}</span><h3>本次导入视频 · 裂缝候选输出</h3><p>${escape(job.filename || "现场视频")} · ${escape(inferenceStatus(job))}</p></div><div class="inference-review-actions">${job.status === "completed" && result.jsonUrl ? `<a class="btn subtle small" href="${escape(result.jsonUrl)}" target="_blank" rel="noopener">查看完整 JSON ↗</a>` : ""}</div></div>
+      ${job.status === "completed" ? `<div class="inference-review-kpis"><span><b>${result.frameCount || 0}</b><small>采样帧</small></span><span><b>${result.candidateCount || 0}</b><small>候选观测</small></span><span><b>${escape(job.detector?.device || "cpu")}</b><small>推理设备</small></span><span><b>${fmt(Number(job.detector?.threshold || 0.7), 2)}</b><small>阈值</small></span></div><div class="inference-candidate-grid">${cards}</div>` : videoInferenceStatusMarkup(job)}
+      <p class="muted inference-boundary">红色叠加区域表示模型输出的裂缝候选，不是确诊病害；确认候选后再进入病害清单和三维定位。当前上传视频结果与下方多场景建模案例共用第二模块复核入口。</p>
+    </section>`;
+  }
   function multiscenePanel() {
     const active =
       multisceneEntries.find((entry) => entry.id === activeMultiscene) ||
       multisceneEntries[0];
     return `<div id="image-review" class="image-review-anchor">${panel(
-      "隧道影像三维复核",
-      `<div class="review-context"><span class="badge mint">02 / 智能解析</span><span>病害候选识别后的影像、三维表面与同帧证据复核</span></div><div class="multiscene-switcher" role="tablist" aria-label="隧道影像三维复核场景">${multisceneEntries
+      "多相机建模与裂缝候选复核",
+      `<div class="review-context"><span class="badge mint">02 / 智能解析</span><span>自动推理结果、原始影像、三维表面与同帧证据复核</span></div>${videoInferenceReviewMarkup(currentVideoInference())}<div class="multiscene-switcher" role="tablist" aria-label="多相机建模与裂缝候选复核场景">${multisceneEntries
         .map(
           (entry) =>
             `<button class="small ${entry.id === active.id ? "primary" : "subtle"}" data-action="multiscene-select" data-scene="${entry.id}" role="tab" aria-selected="${entry.id === active.id}">${entry.label}</button>`,
@@ -762,37 +801,33 @@
   function processingPage() {
     const r = radarData(),
       p = state.processing,
-      ready = processed && processed.input === r.id;
-    return (
-      heading(
-        "智能处理工作流",
-        "沿计划第 2 部分组织计算步骤，输入、参数、输出和算法版本全程可查。",
-        "02 / 对应计划第 2 部分",
-        btn("运行数值预处理", "run-preprocess", "primary") +
-          btn("查看病害台账", "go-defects", "subtle") +
-          btn("进入影像三维复核", "go-image-review", "subtle"),
-      ) +
-      moduleTabs() +
-      panel(
-        "当前影像检测算法",
-        `<div id="currentImageAlgorithm"><div class="grid-2"><div><h3>crack-seg U-Net · 裂缝分割</h3><p class="muted">输入为原始影像帧，输出为裂缝掩码与候选观测。由 algorithm/defect_detect.py 独立运行；现有候选可继续在隧道影像三维复核中查看。</p></div><div>${note("当前检测范围为裂缝候选，须人工复核。视频接入不会自动启动 Python 算法，算法结果尚未自动写入工作台病害记录。", "info")}</div></div><div class="actions">${btn("查看影像检测与三维复核", "go-image-review", "primary")}<a class="btn subtle" href="algorithm/README.md" target="_blank" rel="noopener">查看当前算法说明 ↗</a></div></div>`,
-        '<span class="badge mint">独立影像算法</span>',
-      ) +
-      radarControls() +
-      `<div class="flow">${[
-        ["原始数据", r.source === "import" ? radarTransportLabel(r) + " · 外部快照" : "内置示意", "已加载"],
-        ["数值预处理", "减背景 + 时间增益", ready ? "已完成" : "可运行"],
-        ["RCAN 杂波抑制", "残差通道注意网络", "待接入"],
-        ["RTM 逆时偏移", "全波方程成像接口", "待接入"],
-      ]
-        .map(
-          (s, i) =>
-            `<div class="flow-step ${i === 0 || (i === 1 && ready) ? "done" : ""}"><span class="step-num">STEP 0${i + 1}</span><b>${s[0]}</b><small>${s[1]}</small><span class="badge ${i === 0 || (i === 1 && ready) ? "mint" : ""}">${s[2]}</span></div>`,
-        )
-        .join(
-          "",
-        )}</div><div class="grid-3">${panel("原始输入", `<div class="radar-wrap"><canvas id="rawRadar" aria-label="原始雷达对比图"></canvas></div><div class="radar-caption">${escape(r.name)} · ${r.rows} × ${r.cols}</div>`)}${panel("实际数值预处理", ready ? `<div class="radar-wrap"><canvas id="processedRadar" aria-label="数值预处理对比图"></canvas></div><div class="radar-caption">${fmt(p.durationMs, 2)} ms · ${p.version}</div>` : '<div class="empty"><b>等待运行</b>对当前输入矩阵减去逐行均值，再施加线性时间增益。</div>')}${panel("RTM 成像输出", '<div class="empty"><b>尚未连接 RTM 求解器</b>连接经验证的求解器后才显示成像结果。</div>' + btn("查看算法接入契约", "adapter", "small"))}</div><div class="grid-2">${panel("处理参数", `<div class="form-grid">${field("线性时间增益 g", "gain", p.gain ?? 1, 0, 20, 0.1)}<label class="field">背景去除<span><input type="checkbox" id="background" ${p.background === false ? "" : "checked"}> 逐采样点减去道均值</span></label><label class="field">预处理版本<input value="background-gain-1.0" readonly></label></div><p class="code">y[r,c] = (x[r,c] − mean(x[r,:])) × (1 + g·r/(N−1))</p>${note("真实预处理不会自动生成病害。16 条病害是沿用的演示台账；RCAN 与 RTM 雷达接口尚未接入。影像裂缝检测由上方独立算法流程完成。", "warning")}<div class="actions">${btn("运行 / 重试", "run-preprocess", "primary")}${btn("取消处理", "cancel-processing", "subtle")}${btn("检查 RTM 接口", "try-model", "small")}</div>`)}${panel("RTM 参数与运行记录", `<div class="form-grid">${field("相对介电常数 εr", "rtmEpsilon", p.epsilon || 6, 1, 100, 0.1)}${field("网格步长 / m", "rtmDx", p.dx || 0.01, 0.0001, 1, 0.001)}${field("时间步长 / ns", "rtmDt", p.dt || 0.02, 0.0001, 10, 0.001)}<label class="field">边界条件<select id="rtmBoundary"><option>CPML（待求解器实现）</option></select></label></div><div class="actions">${btn("保存并校核参数", "save-rtm", "small")}</div><p class="muted" style="font-size:11px">二维等距网格参考稳定性诊断：Δt ≤ Δx /(v√2)，v=0.299792458/√εr m/ns。实际限制取决于离散格式与求解器。</p><div class="note info">状态：${escape(p.status || "idle")}<br>输入：${escape(p.inputName || "未运行")}<br>处理时间：${escape(p.finishedAt || "—")}<br>最近提示：${escape(p.message || "等待输入")}</div>`)}</div>`
-    );
+      ready = processed && processed.input === r.id,
+      videoJob = currentVideoInference();
+    const radarFlow = `<div class="flow processing-flow">${[
+      ["原始数据", r.source === "import" ? radarTransportLabel(r) + " · 外部快照" : "内置示意", "已加载"],
+      ["数值预处理", "减背景 + 时间增益", ready ? "已完成" : "可运行"],
+      ["RCAN 杂波抑制", "残差通道注意网络", "待接入"],
+      ["RTM 逆时偏移", "全波方程成像接口", "待接入"],
+    ].map((item, i) => `<div class="flow-step ${i === 0 || (i === 1 && ready) ? "done" : ""}"><span class="step-num">STEP 0${i + 1}</span><b>${item[0]}</b><small>${item[1]}</small><span class="badge ${i === 0 || (i === 1 && ready) ? "mint" : ""}">${item[2]}</span></div>`).join("")}</div>`;
+    return heading(
+      "智能处理工作流",
+      "视频与雷达在本阶段分开处理：视频自动调用本机 Python 输出裂缝候选，雷达执行已接入的数值预处理并保留后端接口。",
+      "02 / 对应计划第 2 部分",
+      btn("查看候选复核", "open-video-inference", "primary") +
+        btn("运行数值预处理", "run-preprocess", "subtle") +
+        btn("查看病害台账", "go-defects", "subtle"),
+    ) + moduleTabs() +
+      `<div class="processing-dashboard" aria-label="智能解析工作台">
+        <div class="processing-primary">
+          ${panel("影像检测 · Python 自动推理", `<div id="currentImageAlgorithm" class="image-algorithm-card"><div class="algorithm-card-head"><div><span class="status-kicker">VIDEO / CRACK CANDIDATE</span><h3>crack-seg U-Net · 裂缝分割</h3><p class="muted">导入现场视频后，平台把录像上传到本机 Python 服务，按采样帧调用 <code>algorithm/defect_detect.py</code>，输出掩码、候选观测和可复核 JSON。</p></div><span class="badge mint">自动启动</span></div>${videoInferenceStatusMarkup(videoJob, true)}<div class="actions">${btn("进入多相机候选复核", "open-video-inference", "primary")}<a class="btn subtle" href="algorithm/README.md" target="_blank" rel="noopener">查看算法说明 ↗</a></div></div>`, '<span class="badge mint">本机 Python</span>')}
+          ${panel("雷达处理 · 外部矩阵", `${radarControls()}${radarFlow}<div class="grid-3 processing-output-grid">${panel("原始输入", `<div class="radar-wrap"><canvas id="rawRadar" aria-label="原始雷达对比图"></canvas></div><div class="radar-caption">${escape(r.name)} · ${r.rows} × ${r.cols}</div>`)}${panel("实际数值预处理", ready ? `<div class="radar-wrap"><canvas id="processedRadar" aria-label="数值预处理对比图"></canvas></div><div class="radar-caption">${fmt(p.durationMs, 2)} ms · ${p.version}</div>` : '<div class="empty"><b>等待运行</b>对当前输入矩阵减去逐行均值，再施加线性时间增益。</div>')}${panel("RTM 成像输出", '<div class="empty"><b>尚未连接 RTM 求解器</b>连接经验证的求解器后才显示成像结果。</div>' + btn("查看算法接入契约", "adapter", "small"))}</div>`, '<span class="badge blue">雷达支路</span>')}
+        </div>
+        <aside class="processing-side-rail">
+          ${panel("本阶段交付物", `<div class="processing-deliverable-list"><div><b>视频</b><span>候选帧、掩码、叠加图、review.json</span></div><div><b>雷达</b><span>原始矩阵、预处理矩阵、参数与运行记录</span></div><div><b>汇合</b><span>病害清单、影像复核和三维定位</span></div></div>${note("两条支路共享任务、批次和证据索引，但不把视频帧送入雷达模型，也不把雷达矩阵送入影像模型。", "info")}`)}
+          ${panel("雷达处理参数", `<div class="form-grid">${field("线性时间增益 g", "gain", p.gain ?? 1, 0, 20, 0.1)}<label class="field">背景去除<span><input type="checkbox" id="background" ${p.background === false ? "" : "checked"}> 逐采样点减去道均值</span></label><label class="field">预处理版本<input value="background-gain-1.0" readonly></label></div><p class="code">y[r,c] = (x[r,:] − mean(x[r,:])) × (1 + g·r/(N−1))</p>${note("真实预处理不会自动生成病害；RCAN 与 RTM 仍是待接入接口。视频裂缝候选由上方 Python 支路生成。", "warning")}<div class="actions">${btn("运行 / 重试", "run-preprocess", "primary")}${btn("取消处理", "cancel-processing", "subtle")}${btn("检查 RTM 接口", "try-model", "small")}</div>`)}
+          ${panel("RTM 参数与运行记录", `<div class="form-grid">${field("相对介电常数 εr", "rtmEpsilon", p.epsilon || 6, 1, 100, 0.1)}${field("网格步长 / m", "rtmDx", p.dx || 0.01, 0.0001, 1, 0.001)}${field("时间步长 / ns", "rtmDt", p.dt || 0.02, 0.0001, 10, 0.001)}<label class="field">边界条件<select id="rtmBoundary"><option>CPML（待求解器实现）</option></select></label></div><div class="actions">${btn("保存并校核参数", "save-rtm", "small")}</div><p class="muted" style="font-size:11px">二维等距网格参考稳定性诊断：Δt ≤ Δx /(v√2)，v=0.299792458/√εr m/ns。</p><div class="note info">状态：${escape(p.status || "idle")}<br>输入：${escape(p.inputName || "未运行")}<br>处理时间：${escape(p.finishedAt || "—")}<br>最近提示：${escape(p.message || "等待输入")}</div>`)}
+        </aside>
+      </div>`;
   }
   function defectsPage() {
     return (
@@ -962,7 +997,7 @@
       Object.entries(s.simulation)
         .map(([key, val]) => simulationSummary(key, val))
         .join("<br>") || "未保存仿真工况。"
-    }</p><h3>七、建议与局限性</h3><p>优先专项复核高风险对象，结合钻孔、其他无损检测与运营条件确认治理方案。停运、限速等重大措施须专业复核。复检证据应记录后再关闭预警，不通过点击操作改变病害真实状态。</p><p>${s.limitations.map(escape).join("<br>")}</p><p>RCAN、RTM 雷达接口、真实车辆硬件及经验证有限元尚未接入；当前影像检测采用独立的 crack-seg U-Net 裂缝分割流程，尚未自动写入工作台病害记录。结构响应只提供简化圆环参数敏感性，方案预算与降险为演示假设。</p></article>`;
+    }</p><h3>七、建议与局限性</h3><p>优先专项复核高风险对象，结合钻孔、其他无损检测与运营条件确认治理方案。停运、限速等重大措施须专业复核。复检证据应记录后再关闭预警，不通过点击操作改变病害真实状态。</p><p>${s.limitations.map(escape).join("<br>")}</p><p>RCAN、RTM 雷达接口、真实车辆硬件及经验证有限元尚未接入；当前影像检测采用 crack-seg U-Net 裂缝分割流程，视频任务结果会写入多相机候选复核区，但正式病害记录仍需人工确认。结构响应只提供简化圆环参数敏感性，方案预算与降险为演示假设。</p></article>`;
   }
   function reportsPage() {
     const snap = C.exportSnapshot(state);
@@ -1735,6 +1770,10 @@
       scrollToAnchor("image-review");
       if (route !== "defects") navigate("defects");
     },
+    "open-video-inference": () => {
+      if (route !== "defects") { navigate("defects"); requestAnimationFrame(() => scrollToAnchor("videoInferenceReview")); }
+      else scrollToAnchor("videoInferenceReview");
+    },
     "scroll-defects-top": () => {
       if (route !== "defects") navigate("defects");
       requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
@@ -1908,7 +1947,7 @@
     },
     adapter: () =>
       showModal(
-        `<h2>真实算法接入契约</h2><p>此处说明 RCAN / RTM 雷达处理接口，不会调用影像检测。当前影像检测采用 algorithm/defect_detect.py 的 crack-seg U-Net 独立流程；算法自动写入病害记录暂未接通。接入雷达后端前需核实代码、许可证、权重或求解器以及适用数据。</p><div class="note info">输入：项目 / 批次 / 测线编号、矩阵、单位和标定；模型名称、版本、参数。<br>输出：状态、数据来源、耗时、证据、坐标 / 单位、置信度、量化依据和失败信息。<br>RTM：介电 / 波速、网格、时间步长、边界条件、稳定性与收敛验证。</div><p>详细说明：<a href="真实算法与数据接入说明.md" target="_blank">真实算法与数据接入说明 ↗</a></p>`,
+        `<h2>真实算法接入契约</h2><p>此处说明 RCAN / RTM 雷达处理接口，不会调用影像检测。视频导入已由本地桥接调用 algorithm/defect_detect.py 的 crack-seg U-Net，并把候选写入多相机复核区；正式病害记录仍需人工确认。接入雷达后端前需核实代码、许可证、权重或求解器以及适用数据。</p><div class="note info">输入：项目 / 批次 / 测线编号、矩阵、单位和标定；模型名称、版本、参数。<br>输出：状态、数据来源、耗时、证据、坐标 / 单位、置信度、量化依据和失败信息。<br>RTM：介电 / 波速、网格、时间步长、边界条件、稳定性与收敛验证。</div><p>详细说明：<a href="真实算法与数据接入说明.md" target="_blank">真实算法与数据接入说明 ↗</a></p>`,
       ),
     "save-rtm": () => {
       const epsilon = Number($("#rtmEpsilon").value),
@@ -2352,6 +2391,16 @@
       });
     } else window.scrollTo(0, 0);
   });
+  document.addEventListener("tunnel-video-inference", (event) => {
+    const job = event.detail?.job;
+    if (!job || !job.batchId || !job.taskId) return;
+    state.videoInferenceJobs = state.videoInferenceJobs || {};
+    state.videoInferenceJobs[inferenceKey(job.batchId, job.taskId)] = job;
+    save();
+    if (route === "processing" || route === "defects") render();
+    if (job.status === "completed") toast(`视频 Python 推理完成：${job.result?.candidateCount || 0} 个裂缝候选已进入复核。`);
+    if (job.status === "failed") toast(job.error || "视频 Python 推理失败。", true);
+  });
   document.addEventListener("tunnel-monitor-state", (event) => {
     const capture = $("#taskCaptureVideo");
     if (capture) { const identity = window.TunnelVideoMonitor.evidenceIdentity(); capture.disabled = !(identity.ready && identity.sourceId); }
@@ -2405,6 +2454,7 @@
   window.SLZJ = {
     snapshot: () => {
       const s = C.exportSnapshot(state);
+      s.videoInferenceJobs = JSON.parse(JSON.stringify(state.videoInferenceJobs || {}));
       s.evidenceRecords=JSON.parse(JSON.stringify((state.evidenceRecords||[]).filter(r=>r.batchId===state.batch)));
       s.evidenceSourceFilter=state.evidenceSourceFilters[window.TunnelEvidenceCore.key(evidenceContext())]||"all";s.evidenceContext=evidenceContext();s.evidenceMode=window.TunnelEvidenceCore.mode(state,evidenceContext());
       return s;

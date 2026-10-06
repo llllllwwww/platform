@@ -1,4 +1,4 @@
-/* 现场视频接入：原生媒体播放，不把外部画面转换为仿真台账或识别结论。 */
+/* 现场视频接入：原生媒体播放，并把本地录像交给 Python 裂缝候选推理。 */
 (function () {
   "use strict";
   const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
@@ -23,8 +23,9 @@
           <button type="button" role="tab" id="monitorTabCamera" aria-controls="monitorCameraPane" aria-selected="false" data-monitor-mode="camera">摄像头 / 采集卡</button>
         </div>
         <div id="monitorFilePane" class="monitor-source-pane" role="tabpanel" aria-labelledby="monitorTabFile">
-          <label class="monitor-file"><span><b>导入现场视频文件</b><small>MP4、WebM 等浏览器可解码的视频；只在本机读取，不上传。</small></span><input id="monitorFile" type="file" accept="video/*,.mp4,.webm,.mov,.m4v" aria-label="选择现场视频文件"></label>
-          <p class="monitor-help">导入录像会显示“录像回放”，不作为实时采集。支持播放、暂停、拖动进度、音量和全屏。</p>
+          <label class="monitor-file"><span><b>导入现场视频文件</b><small>MP4、WebM 等浏览器可解码的视频；导入后仅发送到本机 Python 推理服务，不上传互联网。</small></span><input id="monitorFile" type="file" accept="video/*,.mp4,.webm,.mov,.m4v" aria-label="选择现场视频文件"></label>
+          <label class="monitor-inference-options"><span><b>自动推理采样</b><small>按视频进度均匀抽取代表帧，结果进入候选复核</small></span><select id="monitorInferenceFrames" aria-label="自动推理采样帧数"><option value="8" selected>8 帧 · 快速</option><option value="16">16 帧 · 平衡</option><option value="24">24 帧 · 详细</option></select></label>
+          <p class="monitor-help">导入录像会显示“录像回放”，并自动启动本机 Python 裂缝候选推理；支持播放、暂停、拖动进度、音量和全屏。</p>
         </div>
         <div id="monitorNetworkPane" class="monitor-source-pane" role="tabpanel" aria-labelledby="monitorTabNetwork" hidden>
           <form id="monitorNetworkForm" class="monitor-network-form">
@@ -194,6 +195,11 @@
       })().catch(()=>{if(source===original)source.identityBasis="来源校验失败，不能建立现场对应证据";});
     }
     sessionStart = stamp();
+    if (input.kind === "file" && window.TunnelVideoInference && !window.__SLZJ_DISABLE_AUTO_INFERENCE__) {
+      window.TunnelVideoInference.start(input.file, context, { maxFrames: Number($("#monitorInferenceFrames")?.value || 8) }).catch((error) => {
+        if (source?.name === input.file.name) alertMessage(error.message || "Python 视频推理未启动。");
+      });
+    }
     alertMessage("");
     log("开始接入");
     setStatus("连接中", input.kind === "camera" ? "等待摄像头权限和现场画面。" : "正在加载视频源，等待有效画面。");
@@ -282,7 +288,7 @@
   function record() {
     const current = {kind: source?.kind || null, name: source?.name || null, nature: source?.nature || (source?.kind === "file" ? "recording" : source?.kind === "camera" ? "live" : null), status, sessionStart, lastRenderedFrame: lastFrame, renderedFrames: frames};
     // 不导出媒体内容、设备标识、播放地址的查询参数或浏览器权限。
-    download(`视频接入记录_${context.batchId}_${context.taskId}.json`, new Blob([JSON.stringify({schemaVersion:1, exportedAt:stamp(), association:context, current, captures, events, scope:"仅记录视频接入与截图信息；未生成病害识别、真实车辆控制或工程评价。"},null,2)],{type:"application/json;charset=utf-8"}));
+    download(`视频接入记录_${context.batchId}_${context.taskId}.json`, new Blob([JSON.stringify({schemaVersion:1, exportedAt:stamp(), association:context, current, captures, events, scope:"记录视频接入与截图信息；Python 推理任务由本机服务单独保存，不把媒体内容写入接入记录。"},null,2)],{type:"application/json;charset=utf-8"}));
   }
   function build() {
     const wrapper = document.createElement("div");

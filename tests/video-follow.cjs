@@ -6,6 +6,7 @@ const file=c=>{const published=path.join(__dirname,'..','assets','videos',c.play
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader','--use-fake-device-for-media-stream']});
  const page=await browser.newPage({viewport:{width:1280,height:900},reducedMotion:'reduce'}),checks=[],errors=[],samples=[];
+ await page.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
  const pass=name=>{checks.push({name});console.log('PASS '+name)};
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
  const read=()=>page.evaluate(()=>{const v=document.querySelector('#monitorVideo'),s=document.querySelector('#twinFrame').contentWindow.SLZJScene.snapshot(),state=SLZJ.snapshot();return {time:v.currentTime,duration:v.duration,paused:v.paused,carX:s.carX,scenePlaying:s.playing,records:state.evidenceRecords.length,source:TunnelVideoMonitor.evidenceIdentity().sourceId,task:state.tasks.find(t=>t.id===state.evidenceContext.taskId)}});

@@ -14,6 +14,7 @@ fs.mkdirSync(out, { recursive: true });
     const context = await browser.newContext({ viewport: {width:1440,height:1100}, acceptDownloads:true });
     await context.grantPermissions(['camera'], {origin:'http://127.0.0.1:8765'});
     const page = await context.newPage();
+    await page.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
     page.on('pageerror', e => errors.push(e.message));
     await page.goto('http://127.0.0.1:8765/index.html#tasks');
     await page.waitForSelector('#videoMonitor');
@@ -22,6 +23,7 @@ fs.mkdirSync(out, { recursive: true });
     assert.equal(await page.locator('#monitorEmpty').isVisible(),true);
     pass('设备折叠区、左右对照工作区、病害对应和任务列表完整，空状态正确');
     const fixturePage=await context.newPage();
+    await fixturePage.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
     await fixturePage.bringToFront();
     const fixture = await fixturePage.evaluate(async () => {
       const canvas=document.createElement('canvas'); canvas.width=320;canvas.height=180;

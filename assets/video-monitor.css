@@ -11,6 +11,11 @@
 .monitor-file input { max-width: 100%; min-width: 0; font-size: 11px; }
 .monitor-file input::file-selector-button { cursor: pointer; border: 1px solid rgba(86,217,177,.3); border-radius: 6px; color: var(--mint); background: rgba(86,217,177,.08); padding: 7px 10px; margin-right: 9px; }
 .video-monitor .monitor-help { margin: 10px 0 0; color: #9fb2c4; font-size: 10px; line-height: 1.8; }
+.monitor-inference-options { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding:9px 11px; border:1px solid rgba(86,217,177,.14); border-radius:8px; background:rgba(86,217,177,.035); }
+.monitor-inference-options b, .monitor-inference-options small { display:block; }
+.monitor-inference-options b { color:var(--text); font-size:11px; }
+.monitor-inference-options small { margin-top:3px; color:var(--muted); font-size:9px; }
+.monitor-inference-options select { min-width:120px; }
 .monitor-network-form { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr); gap: 10px; align-items: end; }
 .monitor-network-form button { grid-column: 1 / -1; justify-self: start; }
 .monitor-network-form .field { margin: 0; min-width: 0; }

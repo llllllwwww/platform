@@ -10,6 +10,7 @@ const near=(a,b,eps=1e-6)=>assert(Math.abs(a-b)<eps,`${a} != ${b}`);
  const manifest=JSON.parse(fs.readFileSync(videoFile('sources.json'),'utf8'));
  const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:1440,height:1050},acceptDownloads:true}),checks=[],errors=[],videoResults=[];
+ await page.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});
  const pass=(name,extra)=>{checks.push({name,...extra});console.log('PASS '+name);};
  const snapshot=()=>page.evaluate(()=>SLZJ.snapshot());
@@ -120,7 +121,9 @@ const near=(a,b,eps=1e-6)=>assert(Math.abs(a-b)<eps,`${a} != ${b}`);
   await page.reload();await page.locator('#taskEvidenceDrawer > summary').click();await page.locator('#evidenceLink').waitFor();assert.equal((await snapshot()).evidenceRecords.length,expectedVideos+1);
   pass('导出完整对应关系和视频帧，刷新后记录及来源仍保留');
   // A separate fresh browser context proves that the actual import control restores evidence.
-  const restored=await browser.newPage({viewport:{width:1440,height:1050}});
+  const restoredContext=await browser.newContext({viewport:{width:1440,height:1050},acceptDownloads:true});
+  await restoredContext.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
+  const restored=await restoredContext.newPage();
   restored.on('pageerror',e=>errors.push(e.message));
   await restored.goto('http://127.0.0.1:8765/index.html#tasks');await restored.locator('#taskEvidenceDrawer > summary').click();await restored.locator('#evidenceLink').waitFor();
   await restored.locator('#evidenceImport').setInputFiles(path.join(out,'现场病害对应验证.json'));

@@ -7,6 +7,7 @@ const file=fs.existsSync(published)?published:path.join(out,'public-videos',fixt
 (async()=>{
  const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  const page=await browser.newPage({viewport:{width:1440,height:1000},reducedMotion:'reduce'}),checks=[],errors=[];
+ await page.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
  const pass=name=>{checks.push({name});console.log('PASS '+name)};
  page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text())});
  const scene=()=>page.evaluate(()=>document.querySelector('#twinFrame').contentWindow.SLZJScene.snapshot());
@@ -41,7 +42,7 @@ const file=fs.existsSync(published)?published:path.join(out,'public-videos',fixt
   await page.locator('#taskComparison').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(out,'疑似位置采集-1440.png')});
   await page.setViewportSize({width:390,height:1000});await page.locator('#monitorScreen').scrollIntoViewIfNeeded();
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));await page.screenshot({path:path.join(out,'疑似位置采集-390.png')});pass('双画面对照在桌面与手机布局均无整页横向溢出');
-  await seek(points[1].time+1);await page.waitForFunction(()=>!document.querySelector('#monitorVideo').seeking);assert.equal(await page.locator('.monitor-evidence-point').count(),0);pass('离开记录时刻后隐藏编号点，不假装连续追踪');
+  const duration=await page.locator('#monitorVideo').evaluate(v=>v.duration);const later=Math.min(points[1].time+1,Math.max(points[1].time+0.1,duration-0.2));await seek(later);await page.waitForFunction(()=>!document.querySelector('#monitorVideo').seeking);assert.equal(await page.locator('.monitor-evidence-point').count(),0);pass('离开记录时刻后隐藏编号点，不假装连续追踪');
   await page.goto('http://127.0.0.1:8765/平台架构与使用流程.html');
   assert.equal(await page.locator('details.step').count(),19);assert((await page.locator('body').innerText()).includes('只记录疑似位置'));assert((await page.locator('body').innerText()).includes('type=null'));
   for(const width of [1440,390]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));}
