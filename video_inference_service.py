@@ -62,6 +62,12 @@ class VideoInferenceService:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="slzj-video-inference")
         self._detector_module = None
         self._detector_cache = {}
+        from video_reconstruction_service import VideoReconstructionService
+        self.reconstruction = VideoReconstructionService(self)
+        from video_workspace_service import VideoWorkspaceService
+        self.workspace = VideoWorkspaceService(self)
+        from workbench_session_service import WorkbenchSessionService
+        self.workbench = WorkbenchSessionService(self)
 
     def _snapshot(self, job: dict) -> dict:
         with self.lock:
@@ -74,10 +80,46 @@ class VideoInferenceService:
                     result.pop(private_key, None)
             return result
 
-    def get(self, job_id: str) -> dict | None:
+    def persist(self, job_id: str) -> None:
+        from video_reconstruction_service import write_atomic
         with self.lock:
-            job = self.jobs.get(safe_id(job_id))
-            return self._snapshot(job) if job else None
+            job = self.jobs.get(job_id)
+            if job:
+                write_atomic(Path(job["_dir"]) / "job.json", self._snapshot(job))
+
+    def get(self, job_id: str) -> dict | None:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", job_id or ""):
+            return None
+        with self.lock:
+            job = self.jobs.get(job_id)
+            if not job:
+                directory = self.runtime_root / job_id
+                manifest = directory / "job.json"
+                review_path = directory / "review.json"
+                if manifest.is_file():
+                    job = json.loads(manifest.read_text("utf-8"))
+                    if job.get("id") != job_id:
+                        return None
+                    if job.get("status") in {"queued", "running", "uploading"}:
+                        job.update(status="failed", error="本地服务已重新启动，原推理任务中断，请重新导入视频。")
+                elif review_path.is_file():
+                    review = json.loads(review_path.read_text("utf-8"))
+                    candidates, frames = review.get("candidates", []), review.get("frames", [])
+                    recovered = {}
+                    reconstruction_path = directory / "reconstruction.json"
+                    if reconstruction_path.is_file():
+                        old_model = json.loads(reconstruction_path.read_text("utf-8"))
+                        if old_model.get("id") == job_id and old_model.get("sourceJobId") == job_id:
+                            recovered = {key: old_model.get(key, "") for key in ("batchId", "taskId")}
+                    job = {"id": job_id, "status": "completed", "filename": review["source"]["filename"],
+                        "batchId": recovered.get("batchId", ""), "taskId": recovered.get("taskId", ""), "createdAt": review.get("createdAt"), "progress": {"percent": 100, "phase": "已恢复本机检测成果"},
+                        "detector": review.get("detector", {}), "result": {"candidateCount": len(candidates), "frameCount": len(frames),
+                            "preview": candidates[:18], "jsonUrl": f"/api/video-inference/file/{job_id}/review.json"}, "log": []}
+                else:
+                    return None
+                job.update(_dir=directory, _input=directory / "input" / Path(job["filename"]).name)
+                self.jobs[job_id] = job
+            return self._snapshot(job)
 
     def _update(self, job_id: str, **changes) -> None:
         with self.lock:
@@ -92,6 +134,9 @@ class VideoInferenceService:
                     job["log"] = job["log"][-40:]
                 else:
                     job[key] = value
+            if changes.get("status") in {"completed", "failed", "cancelled"}:
+                self.persist(job_id)
+                self.workspace.refresh(job_id)
 
     def create(self, file_bytes: bytes, filename: str, fields: dict[str, str]) -> dict:
         if not file_bytes:
@@ -116,9 +161,17 @@ class VideoInferenceService:
         # 避免连续点击导入后形成不可见队列，最终让浏览器看起来像“卡退”。
         with self.lock:
             active = next((item for item in self.jobs.values() if item.get("status") in {"uploading", "queued", "running"}), None)
+            if self.reconstruction.busy():
+                raise VideoInferenceBusyError("三维重建正在使用本机资源，请完成后再导入新视频。")
             if active:
                 phase = (active.get("progress") or {}).get("phase") or active.get("status")
                 raise VideoInferenceBusyError(f"已有视频推理任务正在处理（{phase}），请等待完成后再导入下一个视频。")
+            replaced_id = fields.get("replaceVideoId") or ""
+            if replaced_id:
+                self.workspace.directory(replaced_id)
+                previous = self.get(replaced_id)
+                if not previous or previous.get("batchId") != fields.get("batchId") or previous.get("taskId") != fields.get("taskId"):
+                    raise ValueError("要替换的视频不属于当前批次和任务。")
             job_id = dt.datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8]
             job_dir = self.runtime_root / job_id
             input_dir = job_dir / "input"
@@ -147,6 +200,17 @@ class VideoInferenceService:
                 "_device": fields.get("device") if fields.get("device") in {"cpu", "cuda"} else "cpu",
             }
             self.jobs[job_id] = job
+            self.persist(job_id)
+            bundle = self.workspace.initialize(job, file_bytes)
+            job["sourceSha256"] = bundle["manifest"]["source"]["sha256"]
+            job["evidenceSourceId"] = bundle["manifest"]["source"]["evidenceSourceId"]
+            self.persist(job_id)
+            # 兼容旧客户端的 replaceVideoId 参数，但只切换当前视图，永久档案保留。
+            job["deletedVideoIds"] = []
+            job["cleanupStatus"] = "preserved"
+            if replaced_id:
+                job["previousVideoId"] = replaced_id
+            self.persist(job_id)
         self.pool.submit(self._run, job_id)
         return self._snapshot(job)
 
@@ -365,6 +429,9 @@ class VideoInferenceService:
 
     def _build_review(self, job_id: str, job: dict, detections_path: Path, frames: list[dict], metadata: dict) -> dict:
         detections = json.loads(detections_path.read_text("utf-8"))
+        detections.update(videoId=job_id, sourceJobId=job_id, sourceSha256=job.get("sourceSha256"))
+        from video_reconstruction_service import write_atomic
+        write_atomic(detections_path, detections)
         by_image = {frame["name"]: frame for frame in frames}
         frame_stats = {item.get("image"): item for item in detections.get("per_image", [])}
         candidate_rows = []
@@ -387,7 +454,7 @@ class VideoInferenceService:
             frame_rows.append({**frame, "regions": stat.get("regions", 0), "areaRatio": stat.get("area_ratio", 0)})
         preview = candidate_rows[:18]
         result = {
-            "schemaVersion": 1, "jobId": job_id, "source": {"filename": job["filename"], **metadata},
+            "schemaVersion": 1, "jobId": job_id, "videoId": job_id, "sourceSha256": job.get("sourceSha256"), "source": {"filename": job["filename"], **metadata},
             "detector": detections.get("detector", {}), "frames": frame_rows,
             "candidates": candidate_rows, "limits": detections.get("limits", []),
             "createdAt": now_iso(),
@@ -419,7 +486,8 @@ class VideoInferenceService:
             self._update(job_id, status="failed", finishedAt=now_iso(), error=message, progress={"phase": "推理失败", "percent": 100}, log_append=traceback.format_exc(limit=3))
 
     def file_path(self, job_id: str, relative: str) -> Path | None:
-        job_id = safe_id(job_id)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", job_id or ""):
+            return None
         relative = unquote(relative).replace("\\", "/")
         if not job_id or relative.startswith("/") or ".." in Path(relative).parts or relative.startswith("input/"):
             return None
@@ -451,8 +519,70 @@ class LocalWorkBenchHandler(SimpleHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         service = self.inference_service
         parsed = urlparse(self.path)
+        if service and parsed.path == "/api/workbench/session":
+            self._send_json(200, service.workbench.session())
+            return
+        if service and parsed.path in {"/api/workbench/archives", "/api/workbench/archive"}:
+            try:
+                value = {"archives": service.workbench.list()} if parsed.path.endswith("/archives") else service.workbench.read(parse_qs(parsed.query).get("id", [""])[0])
+                self._send_json(200, value)
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+        if service and parsed.path == "/api/video-workspace/media":
+            try:
+                target = service.workspace.media_path(parse_qs(parsed.query).get("id", [""])[0])
+                size = target.stat().st_size
+                start, end, code = 0, size - 1, 200
+                value = self.headers.get("Range")
+                if value:
+                    match = re.fullmatch(r"bytes=(\d*)-(\d*)", value)
+                    if not match or not any(match.groups()):
+                        raise ValueError("视频范围请求无效。")
+                    if match[1]:
+                        start = int(match[1]); end = min(size - 1, int(match[2]) if match[2] else size - 1)
+                    else:
+                        start = max(0, size - int(match[2]))
+                    if not 0 <= start <= end < size:
+                        self.send_response(416); self.send_header("Content-Range", f"bytes */{size}"); self.end_headers(); return
+                    code = 206
+                self.send_response(code)
+                self.send_header("Content-Type", mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", str(end - start + 1))
+                if code == 206:
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                self.end_headers()
+                with target.open("rb") as stream:
+                    stream.seek(start)
+                    remaining = end - start + 1
+                    while remaining > 0:
+                        data = stream.read(min(1024 * 1024, remaining))
+                        if not data: break
+                        self.wfile.write(data); remaining -= len(data)
+            except (BrokenPipeError, ConnectionResetError):
+                return
+            except (ValueError, OSError) as exc:
+                self._send_json(404, {"error": str(exc)})
+            return
+        if service and parsed.path in {"/api/video-workspace/list", "/api/video-workspace/detail"}:
+            try:
+                if parsed.path.endswith("/list"):
+                    self._send_json(200, {"videos": service.workspace.list()})
+                else:
+                    video_id = parse_qs(parsed.query).get("id", [""])[0]
+                    self._send_json(200, service.workspace.refresh(video_id, verify_source=True))
+            except (ValueError, KeyError, TypeError, OSError) as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
         if service and parsed.path == "/api/video-inference/health":
             self._send_json(200, {"ok": True, "service": "local-video-inference", "python": str(sys.executable)})
+            return
+        if service and parsed.path == "/api/video-reconstruction/status":
+            job_id = parse_qs(parsed.query).get("id", [""])[0]
+            job = service.reconstruction.get(job_id)
+            self._send_json(200 if job else 404, job or {"error": "该视频尚未启动三维重建。"})
             return
         if service and parsed.path == "/api/video-inference/status":
             job_id = parse_qs(parsed.query).get("id", [""])[0]
@@ -486,6 +616,52 @@ class LocalWorkBenchHandler(SimpleHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         service = self.inference_service
         parsed = urlparse(self.path)
+        if service and parsed.path == "/api/workbench/archive":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 8 * 1024 * 1024 or "application/json" not in self.headers.get("Content-Type", "").lower():
+                    raise ValueError("工作归档请求必须是 8 MB 以内的 JSON。")
+                fields = json.loads(self.rfile.read(length))
+                if not isinstance(fields, dict):
+                    raise ValueError("工作归档参数格式无效。")
+                self._send_json(200, service.workbench.save(fields))
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+        if service and parsed.path in {"/api/video-workspace/bind", "/api/video-workspace/review", "/api/video-workspace/annotations"}:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= (8 * 1024 * 1024 if parsed.path.endswith("/annotations") else 512 * 1024) or "application/json" not in self.headers.get("Content-Type", "").lower():
+                    raise ValueError("视频档案请求必须是小型 JSON 对象。")
+                fields = json.loads(self.rfile.read(length))
+                if not isinstance(fields, dict):
+                    raise ValueError("视频档案参数必须是 JSON 对象。")
+                action = service.workspace.bind if parsed.path.endswith("/bind") else service.workspace.save_annotations if parsed.path.endswith("/annotations") else service.workspace.save_review
+                self._send_json(200, action(fields))
+            except (ValueError, KeyError, TypeError, OSError) as exc:
+                self._send_json(400, {"error": str(exc)})
+            return
+        if service and parsed.path == "/api/video-reconstruction/start":
+            from video_reconstruction_service import ReconstructionBusyError
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if not 0 < length <= 8192:
+                    raise ValueError("建模请求必须是有效的小型 JSON。")
+                if "application/json" not in self.headers.get("Content-Type", "").lower():
+                    raise ValueError("建模请求必须使用 application/json。")
+                fields = json.loads(self.rfile.read(length))
+                if not isinstance(fields, dict):
+                    raise ValueError("建模参数必须是 JSON 对象。")
+                job = service.reconstruction.start(fields)
+                self._send_json(202, job)
+            except ReconstructionBusyError as exc:
+                self._send_json(409, {"error": str(exc)})
+            except (ValueError, TypeError) as exc:
+                self._send_json(400, {"error": str(exc)})
+            except Exception as exc:
+                traceback.print_exc()
+                self._send_json(500, {"error": f"无法启动建模：{exc}"})
+            return
         if not service or parsed.path != "/api/video-inference/start":
             self._send_json(404, {"error": "未知的本地 API。"})
             return
@@ -513,7 +689,7 @@ class LocalWorkBenchHandler(SimpleHTTPRequestHandler):
                 if name == "video":
                     file_bytes = part.get_payload(decode=True) or b""
                     filename = params.get("filename") or filename
-                elif name in {"batchId", "taskId", "taskName", "maxFrames", "threshold", "device"}:
+                elif name in {"batchId", "taskId", "taskName", "maxFrames", "threshold", "device", "replaceVideoId"}:
                     fields[name] = part.get_content().strip()
             if file_bytes is None:
                 raise ValueError("请求中没有 video 文件字段。")
@@ -529,5 +705,5 @@ class LocalWorkBenchHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args) -> None:
         # 保留关键 HTTP 日志，但不把上传内容写入终端。
-        if self.path.startswith("/api/video-inference"):
+        if self.path.startswith(("/api/video-inference", "/api/video-reconstruction")):
             super().log_message(fmt, *args)

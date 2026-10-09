@@ -7,7 +7,7 @@
  function text(value,name,max=256){if(typeof value!=="string"||!value.trim()||value.length>max)throw Error(name+"须为有效文本");return value;}
  function init(state){state.evidenceRecords=state.evidenceRecords||[];state.evidenceModes=state.evidenceModes||{};state.evidenceSourceFilters=state.evidenceSourceFilters||{};return state;}
  function key(c){return c.batchId+"/"+c.taskId;}
- function records(state,c){init(state);return state.evidenceRecords.filter(x=>x.batchId===c.batchId&&x.taskId===c.taskId);}
+ function records(state,c){init(state);return state.evidenceRecords.filter(x=>x.batchId===c.batchId&&x.taskId===c.taskId&&(!c.videoSourceId||x.anchors.some(a=>a.sourceId===c.videoSourceId)));}
  function visible(state,c){const list=records(state,c),source=state.evidenceSourceFilters[key(c)]||"all";return source==="all"?list:list.filter(r=>r.anchors.some(a=>a.sourceId===source));}
  function setSource(state,c,id){init(state);state.evidenceSourceFilters[key(c)]=id;}
  function mode(state,c){init(state);return state.evidenceModes[key(c)]||"demo";}

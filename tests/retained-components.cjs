@@ -1,3 +1,4 @@
+const base = process.env.TEST_BASE_URL || "http://127.0.0.1:8765";
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const fs = require("fs"),
   path = require("path"),
@@ -18,7 +19,9 @@ const fs = require("fs"),
     checks.push(x);
     console.log("PASS", x);
   };
-  await p.goto("http://127.0.0.1:8765/index.html#twin");
+  await p.goto(base + "/index.html#twin");
+  await p.locator("#videoDatasetSelect").waitFor();
+  await p.locator("#videoDatasetSelect").selectOption("__demo");
   await p.waitForFunction(
     () => document.querySelector("#twinFrame")?.contentWindow?.SLZJScene,
   );
@@ -26,7 +29,7 @@ const fs = require("fs"),
       .frames()
       .find((f) => f.url().includes("assets/tunnel-scene.html")),
     sc = () => f.evaluate(() => SLZJScene.snapshot());
-  await f.waitForFunction(() => SLZJScene.snapshot().selectedId === "D-001");
+  await f.waitForFunction(() => SLZJScene.snapshot().visibleIds.includes("D-001"));
   assert((await sc()).layers.stars);
   assert((await sc()).layers.city);
   pass("星空、城市背景在新版默认保留");
@@ -190,14 +193,19 @@ const fs = require("fs"),
   }
   const originalHistory = await checkHistory(defaultState);
   pass("SHI历史曲线复用两批次同口径评估，年化变化率按实际日期间隔计算");
-  await p.goto("http://127.0.0.1:8765/index.html#health");
+  await p.goto(base + "/index.html#health");
+  await p.locator("#videoDatasetSelect").waitFor();
+  await p.locator("#videoDatasetSelect").selectOption("__demo");
   await p.locator("#alpha").fill("0");
   await p.locator("#alpha").dispatchEvent("change");
-  await p.goto("http://127.0.0.1:8765/index.html#twin");
+  await p.goto(base + "/index.html#twin");
+  await p.locator("#videoDatasetSelect").selectOption("__demo");
   const changedHistory = await checkHistory({ ...defaultState, alpha: 0 });
   assert.notDeepEqual(originalHistory, changedHistory);
   pass("修改组合权重后历史两期SHI及变化率同步重算");
-  await p.goto("http://127.0.0.1:8765/index.html#tasks");
+  await p.goto(base + "/index.html#tasks");
+  await p.locator("#videoDatasetSelect").waitFor();
+  await p.locator("#videoDatasetSelect").selectOption("__demo");
   await p.waitForFunction(
     () => document.querySelector("#twinFrame")?.contentWindow?.SLZJScene,
   );
@@ -237,8 +245,10 @@ const fs = require("fs"),
   assert(!fs.existsSync(path.join(__dirname, "../隧道三维数字孪生平台.html")));
   assert(!fs.existsSync(path.join(__dirname, "../legacy/原三维平台.html")));
   const direct = await b.newPage();
-  await direct.goto("http://127.0.0.1:8765/assets/tunnel-scene.html");
+  await direct.goto(base + "/assets/tunnel-scene.html");
   await direct.waitForURL("**/index.html#twin");
+  await direct.locator("#videoDatasetSelect").waitFor();
+  await direct.locator("#videoDatasetSelect").selectOption("__demo");
   await direct.waitForFunction(
     () => document.querySelector("#twinFrame")?.contentWindow?.SLZJScene,
   );

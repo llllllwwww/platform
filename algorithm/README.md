@@ -97,3 +97,11 @@ node tests/verify_browser.cjs --regularized
 ## 提交范围
 
 仓库包含本项目流程代码、前端模板、依赖说明、下载入口和小型验证记录。视频、图像、模型权重、第三方源码副本、CUDA 二进制、虚拟环境、浏览器配置以及大型重建产物不提交。克隆代码后需要准备环境并运行流程，GitHub Pages 主工作台不会因此自动载入本地实验结果。
+
+## 本地工作台：检测后手动建模
+
+根目录 `启动平台.py` 已提供 `/api/video-reconstruction/start`（POST JSON：`jobId`、`batchId`、`taskId`、`maxFrames`）与 `/api/video-reconstruction/status?id=...`。只有已完成同源检测任务可启动；视频检测和重建共用单一资源槽位，重复请求返回同一运行，失败可重试。原检测成果保持不变。
+
+`video_reconstruction_job.py` 是独立子进程入口：复用原检测帧与候选，补抽时间邻帧；CPU SIFT / 匹配 → 增量 SfM（不足时全局 SfM）→ 原始稀疏观测面与同帧候选射线交点 → 按本次相机 / 点云拟合圆柱规则化观察面 → 深色 WebGL 复核。新视频默认显示使用中性灰材质的规则化观察面，也可切换原始重建查看现场纹理；补抽帧不再次检测。筛选条件包含多帧轨迹、重投影残差、局部边长和深度连续性，未知表面及未注册帧不补坐标，圆柱面不改变原始命中判定。
+
+本机验证 Python 3.12 / PyCOLMAP 4.1.1 CPU，几何依赖 `numpy`、`scipy`、`opencv-python`、`Pillow`、`pycolmap`，可用 `SLZJ_RECONSTRUCTION_PYTHON` 指定 Python。相对尺度、局部插值支撑、圆柱观察先验与候选观测不等于测量精度、完整稠密网格或独立病害。原 CUDA 稠密脚本与已有多场景案例保留。使用步骤见根目录《平台使用说明》。

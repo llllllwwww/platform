@@ -48,3 +48,8 @@ tests/output/
 algorithm/video_reconstruction/pip-*/
 # 本地视频推理运行目录（上传视频、抽帧、掩码和复核 JSON）
 runtime/
+
+# 多相机复核原片仅用于本地试跑；MP4 已由全局规则忽略
+/assets/videos/multiscene/*.webm
+/assets/videos/multiscene/*.part
+/assets/videos/multiscene/.source-fetch-*/

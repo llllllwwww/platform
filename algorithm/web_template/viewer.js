@@ -38,6 +38,7 @@ function prepare(mesh){const positions=transform(unpack(mesh.positions));return 
 const assets={raw:prepare(D.mesh)};
 if(D.regularized){assets.regularized=prepare(D.regularized.mesh);const cp=unpack(D.regularized.mesh.caps);assets.caps={pos:buffer(transform(cp)),uv:buffer(new Float32Array(cp.length/3*2)),count:cp.length/3};}
 const trajectory=D.cameras.map(c=>local(c.center)),pathB=buffer(new Float32Array(trajectory.flat()));
+const sparseData=D.sparse_points?transform(unpack(D.sparse_points)):new Float32Array(),sparseB=buffer(sparseData);
 const markerB=buffer(new Float32Array()),activeB=buffer(new Float32Array()),cameraB=buffer(new Float32Array(trajectory[0]));
 let surfaceMode=D.regularized?'regularized':'raw',frame=0,selected=null,mode=D.regularized?'follow':'orbit';
 let yaw=.65,pitch=.35,dist=(D.regularized?.bounds||D.bounds).radius*2.7,target=[0,0,0],vp=null,view=null,activeLens=null,markerCount=0,activeCount=0,currentCandidates=[];
@@ -85,12 +86,12 @@ function draw(){const rect=canvas.getBoundingClientRect(),dpr=Math.min(devicePix
  else eye=add(target,[dist*Math.cos(pitch)*Math.sin(yaw),dist*Math.sin(pitch),dist*Math.cos(pitch)*Math.cos(yaw)]);
  view=lookAt(eye,look,up);activeLens=mode==='follow'?lensParameters(D.cameras[frame]):null;const projection=perspective(fov,w/h,D.bounds.radius*.0005,D.bounds.radius*200);
  if(activeLens?.kind){const [fx,fy,cx,cy]=activeLens.intrinsic,H=activeLens.height;projection[0]=2*fx/(H*w/h);projection[5]=2*fy/H;projection[8]=(activeLens.width-2*cx)/(H*w/h);projection[9]=2*cy/H-1;}
- vp=multiply(projection,view);renderMesh(assets[surfaceMode]);if(surfaceMode==='regularized'&&$('showCaps').checked)renderMesh(assets.caps,true);
+ vp=multiply(projection,view);renderPoints(sparseB,sparseData.length/3,[.5,.68,.75,1],2);renderMesh(assets[surfaceMode]);if(surfaceMode==='regularized'&&$('showCaps').checked)renderMesh(assets.caps,true);
  if($('showPath').checked){renderPoints(pathB,trajectory.length,[.27,.78,.91,1],2,gl.LINE_STRIP);renderPoints(cameraB,1,[.44,.94,1,1],9,gl.POINTS,true);}
  if($('showMarkers').checked){renderPoints(markerB,markerCount,[1,.23,.18,1],4);renderPoints(activeB,activeCount,[1,.8,.18,1],7);}
  const err=gl.getError();if(err!==gl.NO_ERROR)throw Error('WebGL 绘制错误 '+err);document.body.dataset.rendered='true';document.body.dataset.glError=String(err);}
 function resetSelection(){selected=null;$('selection').textContent='从列表或三维红色点簇中选择候选。';$('relatedViews').replaceChildren();}
-function changeFrame(index,seekVideo=false){frame=Math.max(0,Math.min(D.cameras.length-1,index));$('time').value=frame;const c=D.cameras[frame];$('timeLabel').textContent=c.time_s.toFixed(2)+' s · '+(frame+1)+'/'+D.cameras.length;$('frameLabel').textContent=c.image_name+' · 原图 '+c.width+' × '+c.height;$('frameImage').src=c.image_url;
+function changeFrame(index,seekVideo=false){frame=Math.max(0,Math.min(D.cameras.length-1,index));$('time').value=frame;const c=D.cameras[frame];$('timeLabel').textContent=c.time_s.toFixed(2)+' s · '+(frame+1)+'/'+D.cameras.length;$('frameLabel').textContent=c.image_name+' · 原图 '+c.width+' × '+c.height+(c.has_detection===false?' · 补抽建模帧 / 未运行检测':'');$('frameImage').src=c.image_url;
  $('maskImage').src=c.mask_url||'';$('maskImage').style.display=$('showMask').checked&&c.mask_url?'block':'none';updateBuffer(cameraB,trajectory[frame]);if(selected&&selected.image_name!==c.image_name)resetSelection();updateCandidates();refreshLabels();if(seekVideo&&D.video_url&&Math.abs($('video').currentTime-c.time_s)>.05)$('video').currentTime=c.time_s;draw();}
 const evidenceGroups=new Map((D.multiview?.groups||[]).map(g=>[g.id,g]));
 function repeated(d){return(d.evidence?.supporting_views||0)>0||(evidenceGroups.get(d.evidence?.group_id)?.observation_count||0)>1;}
@@ -103,7 +104,7 @@ function updateCandidates(){const threshold=+$('confidence').value;$('confidence
 function select(d){selected=d;const p=d.center,text=['观测编号：'+d.id,'模型分数：'+d.confidence.toFixed(3)+'（不代表准确率）','几何命中：'+d.hit_count+'/'+d.requested_count,
  '状态：'+(p?(surfaceMode==='regularized'?'已关联到当前优化表面，病害待复核':'已落在原始表面，病害待复核'):'未通过当前表面的定位检查'),
  p?'三维中心：['+p.map(x=>x.toFixed(4)).join(', ')+'] '+D.scale.unit:'',
- surfaceMode==='regularized'&&p?'与原位置的中位位移：'+d.displacement_median.toFixed(4)+' '+D.scale.unit:'',
+ surfaceMode==='regularized'&&p&&Number.isFinite(d.displacement_median)?'与原位置的中位位移：'+d.displacement_median.toFixed(4)+' '+D.scale.unit:'',
  surfaceMode==='regularized'&&p?'落在局部补全区的采样点：'+d.inferred_hit_count:'',
  d.evidence?'邻帧模型响应：相符 '+d.evidence.supporting_views+' 次；未重复 '+d.evidence.not_repeated_views+' 次':'',
  d.evidence?'关联组：'+d.evidence.group_id+'（仍需人工复核）':''];
@@ -114,7 +115,7 @@ function drawEvidence(){const cv=$('evidenceCanvas'),box=$('evidenceBox'),c=D.ca
 function refreshLabels(){const fitted=surfaceMode==='regularized';$('regularized').classList.toggle('active',fitted);$('raw').classList.toggle('active',!fitted);const observedOnly=D.regularized?.report.surface_kind==='observed_smoothed',capsAvailable=!!assets.caps?.count;
  $('regularized').textContent=observedOnly?'观测表面去噪':'规则化表面';$('showCaps').disabled=!fitted||!capsAvailable;if(!capsAvailable)$('showCaps').checked=false;
  $('showInferred').disabled=!fitted||observedOnly;
- $('overview').classList.toggle('active',mode==='orbit');$('follow').classList.toggle('active',mode==='follow');$('modeName').textContent=(fitted?(observedOnly?'观测表面去噪':'规则化连续表面'):'原始多视图重建')+(mode==='follow'?' · 同帧相机位置 / 虚拟透视':'')+(mode==='follow'&&D.cameras[frame].model==='OPENCV_FISHEYE'?'（右侧为原始鱼眼）':'');
+ $('overview').classList.toggle('active',mode==='orbit');$('follow').classList.toggle('active',mode==='follow');const primitive=D.regularized?.report?.surface_kind==='primitive_cylinder';$('modeName').textContent=fitted?(observedOnly?'观测表面去噪':primitive?'圆柱规则化隧道表面':'规则化连续表面'):(D.geometry_kind==='sparse_observed_surface'?'稀疏重建与局部观测表面':'原始多视图重建')+(mode==='follow'?' · 同帧相机位置 / 虚拟透视':'')+(mode==='follow'&&D.cameras[frame].model==='OPENCV_FISHEYE'?'（右侧为原始鱼眼）':'');
  $('surfaceNote').textContent=fitted?(observedOnly?'保留观测边界；未推断缺失墙面或端盖':($('showInferred').checked?'橙色：局部观测不足的补全区域':'断面来自点云拟合；两端为建模区段边界')):'保留原始孔洞、离群面和洞外场景';
  const count=assets[surfaceMode].count/3+(fitted&&$('showCaps').checked?assets.caps.count/3:0);
  const topology=D.regularized?.report[fitted?($('showCaps').checked?'closed_topology':'regularized_topology'):'raw_topology'];
@@ -126,6 +127,7 @@ document.title=D.title;$('sourceTitle').textContent=D.title;$('scaleTag').textCo
 $('attribution').append(D.source.author+' · '+D.source.license);if(D.source.url){const a=document.createElement('a');a.href=D.source.url;a.target='_blank';a.rel='noreferrer';a.textContent=' · 原始素材来源';$('attribution').append(a);}
  if(D.video_url)$('video').src=D.video_url;else $('video').closest('details').style.display='none';$('time').max=D.cameras.length-1;
  $('repeatOnly').disabled=!D.multiview;const defaultThreshold=D.detector?.threshold??.7;$('confidence').min=Math.min(.5,defaultThreshold);$('confidence').value=defaultThreshold;
+if(!D.regularized&&D.geometry_kind==='sparse_observed_surface')$('showTexture').checked=false;
 if(!D.regularized)$('surfaceControls').style.display='none';$('regularized').onclick=()=>setSurface('regularized');$('raw').onclick=()=>setSurface('raw');
 $('time').oninput=e=>changeFrame(+e.target.value,true);$('prev').onclick=()=>changeFrame(frame-1,true);$('next').onclick=()=>changeFrame(frame+1,true);
 $('repeatOnly').onchange=()=>{resetSelection();updateCandidates();draw();};

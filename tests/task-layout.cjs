@@ -1,4 +1,5 @@
 /* 同屏工作区验收：真实录像标注、折叠状态与媒体生命周期、原有场景控制和响应式。 */
+const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8765';
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
 const out = path.join(__dirname, 'output');
@@ -17,11 +18,11 @@ const near = (a,b,eps=1) => assert(Math.abs(a-b)<=eps,`${a} 与 ${b} 相差超�
   const pass = (name,data) => {checks.push({name,...data});console.log('PASS',name,data?JSON.stringify(data):'');};
   try {
     const context = await browser.newContext({viewport:{width:1440,height:1000}, reducedMotion:'reduce'});
-    await context.grantPermissions(['camera'],{origin:'http://127.0.0.1:8765'});
+    await context.grantPermissions(['camera'],{origin:base});
     const page = await context.newPage();
     await page.addInitScript(() => { window.__SLZJ_DISABLE_AUTO_INFERENCE__ = true; });
     page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE ERROR',e.message);});
-    await page.goto('http://127.0.0.1:8765/index.html#tasks');
+    await page.goto(base+'/index.html#tasks');
     await page.waitForFunction(()=>document.querySelector('#twinFrame')?.contentWindow?.SLZJScene,null,{timeout:60000});
     const frame=page.frames().find(f=>f.url().includes('tunnel-scene.html'));
     await frame.locator('#loading').waitFor({state:'hidden'});

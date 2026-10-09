@@ -14,7 +14,16 @@
     "test:layout": "node tests/task-layout.cjs",
     "test:positions": "node tests/video-position-ui.cjs",
     "test:follow": "node tests/video-follow.cjs",
-    "test:review": "node tests/position-review.cjs"
+    "test:review": "node tests/position-review.cjs",
+    "test:inference-ui": "node tests/video-inference-ui.cjs",
+    "test:inference-live": "node tests/video-inference-live.cjs",
+    "test:inference-pixels": "node tests/video-inference-pixels.cjs",
+    "test:reconstruction-ui": "node tests/video-reconstruction-ui.cjs",
+    "test:reconstruction-live": "node tests/video-reconstruction-live.cjs",
+    "test:reconstruction-pixels": "node tests/video-inference-pixels.cjs --reconstruction",
+    "test:video-data": "python -m unittest discover -s tests -p test_video_workspace.py",
+    "test:video-data-ui": "node tests/video-workspace-ui.cjs",
+    "test:workbench-session": "python -m unittest discover -s tests -p test_workbench_session.py"
   },
   "devDependencies": {
     "playwright": "1.63.0"

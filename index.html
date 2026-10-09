@@ -9,21 +9,26 @@
       href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%228%22 fill=%22%2356d9b1%22/%3E%3C/svg%3E"
     />
     <title>隧雷智检 · 隧道智能检测与数字孪生平台</title>
-    <link rel="stylesheet" href="assets/styles.css" />
+    <link rel="stylesheet" href="assets/styles.css?v=20261008-session-6" />
     <link rel="stylesheet" href="assets/video-monitor.css" />
-    <link rel="stylesheet" href="assets/video-inference.css" />
+    <link rel="stylesheet" href="assets/video-inference.css?v=20261008-session-6" />
     <link rel="stylesheet" href="assets/radar-acquisition.css" />
     <link rel="stylesheet" href="assets/evidence-link.css" />
     <link rel="stylesheet" href="assets/task-workspace.css" />
     <script defer src="assets/core.js"></script>
     <script defer src="assets/adapters.js"></script>
-    <script defer src="assets/video-inference.js"></script>
-    <script defer src="assets/video-monitor.js"></script>
+    <link rel="stylesheet" href="assets/video-workspace.css?v=20261008-session-6">
+    <script defer src="assets/display-diagnostics.js?v=20261008-session-6"></script>
+    <script defer src="assets/video-inference.js?v=20261008-session-6"></script>
+    <script defer src="assets/video-monitor.js?v=20261008-session-6"></script>
     <script defer src="assets/radar-acquisition.js"></script>
-    <script defer src="assets/evidence-core.js"></script>
+    <script defer src="assets/evidence-core.js?v=20261008-session-6"></script>
     <script defer src="assets/position-review.js"></script>
     <script defer src="assets/evidence-link.js"></script>
-    <script defer src="assets/app.js"></script>
+    <script defer src="assets/video-reconstruction.js?v=20261008-session-6"></script>
+    <script defer src="assets/video-workspace.js?v=20261008-session-6"></script>
+    <script defer src="assets/workbench-session.js?v=20261008-session-6"></script>
+    <script defer src="assets/app.js?v=20261008-session-6"></script>
   </head>
   <body>
     <aside class="sidebar">
@@ -37,7 +42,7 @@
       <nav id="navigation" aria-label="主导航"></nav>
       <div class="sidebar-bottom">
         <span class="status-dot"></span> 本地工作台
-        <small>数据保存在当前浏览器</small
+        <small>视频成果保存在本机视频档案</small
         ><a href="平台使用说明.md" target="_blank">使用说明 ↗</a>
       </div>
     </aside>
@@ -56,10 +61,12 @@
           </button>
         </div>
       </header>
+      <section id="videoWorkspaceBar" aria-label="当前视频数据来源"></section>
       <main id="page" tabindex="-1"></main>
       <footer class="footer">
         <span>隧道智能检测与数字孪生平台</span
         ><span id="saveStatus">本地状态已就绪</span
+        ><span id="frontendVersion">界面版本 2026.10.08.6</span
         ><span>检测 · 理解 · 评估 · 决策</span>
       </footer>
     </div>

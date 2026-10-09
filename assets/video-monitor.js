@@ -95,7 +95,7 @@
     $("[data-monitor-action=capture]").disabled = !ready;
     $("[data-monitor-action=stop]").disabled = !source && status !== "连接中";
     $("[data-monitor-action=reconnect]").disabled = !reconnectSource;
-    document.dispatchEvent(new CustomEvent("tunnel-monitor-state", {detail: {active: !!source && ready, kind: source?.kind || null, status, sourceId: source?.evidenceId || null, timeSec: source?.kind === "file" || source?.nature === "recording" ? video.currentTime : null, durationSec: Number.isFinite(video.duration) ? video.duration : null}}));
+    document.dispatchEvent(new CustomEvent("tunnel-monitor-state", {detail: {active: !!source && ready, kind: source?.kind || null, videoId: source?.videoId || null, sourceName: source?.name || "", batchId: context?.batchId, taskId: context?.taskId, status, sourceId: source?.evidenceId || null, timeSec: source?.kind === "file" || source?.nature === "recording" ? video.currentTime : null, durationSec: Number.isFinite(video.duration) ? video.duration : null}}));
   }
   function cancelFrameWatch() {
     const video = $("#monitorVideo");
@@ -169,6 +169,7 @@
   async function start(input) {
     // 先校验新来源，校验失败不打断正在播放的旧来源。
     if (input.kind === "file" && (!input.file || (!input.file.type.startsWith("video/") && !/\.(mp4|webm|mov|m4v|ogv)$/i.test(input.file.name)))) throw Error("请选择浏览器可播放的视频文件，例如 MP4 或 WebM。");
+    if (input.kind === "file" && !window.__SLZJ_DISABLE_AUTO_INFERENCE__ && (window.TunnelVideoInference?.busy?.() || window.TunnelVideoReconstruction?.busy?.())) throw Error("检测或三维重建仍在运行，请等待完成后再换新视频；原视频和成果已保留。");
     if (input.kind === "network") input = {...input, url: networkURL(input.url)};
     if (input.kind === "camera" && (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)) throw Error("摄像头需要在本地启动器或 HTTPS 页面中使用，并允许摄像头权限。");
     if (input.kind === "network" && input.format === "video" && /\.m3u8(?:\?|$)/i.test(input.url)) {
@@ -176,12 +177,14 @@
       if (!video.canPlayType("application/vnd.apple.mpegurl") && !video.canPlayType("application/x-mpegURL")) throw Error("当前浏览器不支持原生 HLS。请使用浏览器可播放的视频直链、MJPEG，或在支持原生 HLS 的浏览器中连接。");
     }
     release();
+    events = []; captures = []; frames = 0; lastFrame = null;
     inactive = false;
     reconnectSource = input;
     const expected = token;
     source = {...input, name: input.kind === "file" ? input.file.name : input.kind === "camera" ? "摄像头 / 采集卡" : new URL(input.url).origin + new URL(input.url).pathname};
     source.evidenceId = input.kind === "file" ? null : "VS-" + stamp() + "-" + Math.random().toString(36).slice(2,9);
     source.identityBasis = input.kind === "file" ? "SHA-256 整文件校验" : "本次接入会话（不能跨会话冒用）";
+    if (input.videoId) { source.videoId = input.videoId; source.name = input.filename; source.evidenceId = input.sourceId; source.identityBasis = "本机归档视频 SHA-256 来源索引"; }
     if(input.kind === "file") {
       const original = source;
       (async()=>{
@@ -196,7 +199,9 @@
     }
     sessionStart = stamp();
     if (input.kind === "file" && window.TunnelVideoInference && !window.__SLZJ_DISABLE_AUTO_INFERENCE__) {
-      window.TunnelVideoInference.start(input.file, context, { maxFrames: Number($("#monitorInferenceFrames")?.value || 8) }).catch((error) => {
+      window.TunnelVideoInference.start(input.file, context, { maxFrames: Number($("#monitorInferenceFrames")?.value || 8) }).then(job => {
+        if (expected === token && source && job?.id) { source.videoId = job.id; if (job.evidenceSourceId) source.evidenceId = job.evidenceSourceId; refresh(); }
+      }).catch((error) => {
         if (source?.name === input.file.name) alertMessage(error.message || "Python 视频推理未启动。");
       });
     }
@@ -408,11 +413,14 @@
     let thumbnail;try{thumbnail=cv.toDataURL("image/jpeg",.72);}catch{throw Error("此视频跨域取帧受限，不能生成对应证据；请使用允许取帧的源或本地录像");}
     return {kind:"video",sourceId:source.evidenceId,sourceName:source.name,batchId:context.batchId,taskId:context.taskId,width,height,timeSec:source.kind==="file"||source.nature==="recording"?video.currentTime:null,durationSec:Number.isFinite(video.duration)?video.duration:null,frameAt:stamp(),thumbnail,identityBasis:source.identityBasis,nature:source.kind==="file"||source.nature==="recording"?"recording":"live"};
   }
-  function evidenceIdentity(){const video=$("#monitorVideo");return {timeSec:source?.kind==="file"||source?.nature==="recording"?video?.currentTime??null:null,durationSec:Number.isFinite(video?.duration)?video.duration:null,sourceId:source?.evidenceId||null,batchId:context?.batchId,taskId:context?.taskId,ready};}
+  function evidenceIdentity(){const video=$("#monitorVideo");return {timeSec:source?.kind==="file"||source?.nature==="recording"?video?.currentTime??null:null,durationSec:Number.isFinite(video?.duration)?video.duration:null,sourceId:source?.evidenceId||null,videoId:source?.videoId||null,batchId:context?.batchId,taskId:context?.taskId,ready};}
   function seekEvidence(anchor){
     if(!ready||anchor.sourceId!==source?.evidenceId||anchor.taskId!==context.taskId||anchor.batchId!==context.batchId)throw Error("请重新导入该证据的原视频；当前视频来源或任务不匹配");
     if(anchor.timeSec===null)throw Error("实时证据没有可拖动的录像时间，请查看保存的证据帧");
     const video=$("#monitorVideo");video.pause();video.currentTime=anchor.timeSec;refresh();
   }
-  window.TunnelVideoMonitor = {mount, beforeRender, evidenceSnapshot, evidenceIdentity, seekEvidence};
+  window.TunnelVideoMonitor = {mount, beforeRender, evidenceSnapshot, evidenceIdentity, seekEvidence,
+    clearArchive() { if (source) release(); reconnectSource = null; },
+    openArchive(input) { if (!root || !context) return Promise.resolve(); return start({ ...input, kind: "network", format: "video", nature: "recording" }); }
+  };
 })();

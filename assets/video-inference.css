@@ -80,3 +80,46 @@
   .inference-pulse { animation: none; }
   .inference-progress span { transition: none; }
 }
+
+/* 检测页保持持续工作台显示，禁止整页淡入把轮询表现为闪屏。 */
+#page[data-route="processing"] > *,
+#page[data-route="defects"] > * { animation: none; }
+.processing-dashboard .panel:hover { transform: none; }
+.video-inference-status [hidden] { display: none !important; }
+.inference-status-head > .badge { min-width: 4.5em; text-align: center; }
+
+/* 02 工作台稳定显示：深层空状态/状态灯也会变化，不能只停掉页面根动画。 */
+body[data-route="processing"] #page *,
+body[data-route="processing"] #page *::before,
+body[data-route="processing"] #page *::after,
+body[data-route="defects"] #page *,
+body[data-route="defects"] #page *::before,
+body[data-route="defects"] #page *::after { animation: none !important; transition: none !important; }
+body[data-route="processing"] .status-dot,
+body[data-route="defects"] .status-dot { animation: none !important; opacity: 1; }
+body[data-route="processing"] .sidebar,
+body[data-route="defects"] .sidebar { background: #111823; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body[data-route="processing"] .topbar,
+body[data-route="defects"] .topbar { background: #0b1018; backdrop-filter: none; -webkit-backdrop-filter: none; transition: none; }
+body[data-route="processing"] #page .panel:hover,
+body[data-route="defects"] #page .panel:hover { transform: none; }
+
+/* 本次视频手动建模：稳定布局与原推理卡片保持一致。 */
+.video-reconstruction-card{margin-top:18px;padding:20px;border:1px solid rgba(86,217,177,.18);border-radius:14px;background:#111b26;min-width:0}
+.reconstruction-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+.reconstruction-head h3{margin:7px 0 8px;font-size:17px;color:#e8f0f7}
+.reconstruction-head p{margin:0;color:#9fb2c4;line-height:1.7;font-size:12px;max-width:68ch}
+.reconstruction-head .badge{min-width:5em;justify-content:center;flex-shrink:0}
+.reconstruction-controls{display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;margin:16px 0}
+.reconstruction-controls label{display:grid;gap:6px;color:#9fb2c4;font-size:11px;min-width:150px}
+.reconstruction-controls select{width:100%;min-height:36px;background:#0b1018;color:#e8f0f7;border:1px solid rgba(86,217,177,.24);border-radius:8px;padding:6px 10px}
+.reconstruction-controls button{min-height:36px;font-size:12px}
+.reconstruction-controls button:disabled{opacity:.55;cursor:default}
+.reconstruction-progress{margin:10px 0 8px}
+.reconstruction-phase{display:flex;justify-content:space-between;gap:12px;color:#9fb2c4;font-size:11px;margin-bottom:12px}
+.reconstruction-phase b{font-variant-numeric:tabular-nums;color:#56d9b1;flex-shrink:0}
+.reconstruction-result p{font-size:12px;line-height:1.7;color:#e8f0f7}
+.reconstruction-limit{font-size:11px;color:#9fb2c4;line-height:1.7;margin:14px 0 0}
+#videoReconstructionStatus [hidden],#uploadedSceneTab[hidden]{display:none!important}
+.video-reconstruction-card :focus-visible{outline:2px solid #56d9b1;outline-offset:3px}
+@media(max-width:767px){.video-reconstruction-card{padding:14px}.reconstruction-head{gap:10px}.reconstruction-controls label{flex:1}.reconstruction-controls button{width:100%}}

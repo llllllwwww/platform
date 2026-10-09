@@ -5,8 +5,13 @@
   let active = null;
   let pollTimer = null;
   let sequence = 0;
+  let lastDispatched = "";
 
   const dispatch = (job, extra = {}) => {
+    // 日志追加不影响进度显示；相同快照仍继续轮询，但不触发 DOM / 本地存储更新。
+    const signature = JSON.stringify({ job: job ? { ...job, log: undefined } : null, ...extra });
+    if (signature === lastDispatched) return;
+    lastDispatched = signature;
     const detail = { job: job ? JSON.parse(JSON.stringify(job)) : null, ...extra };
     document.dispatchEvent(new CustomEvent("tunnel-video-inference", { detail }));
   };
@@ -21,6 +26,7 @@
       const job = await response.json();
       if (token !== sequence) return;
       active = job;
+      window.TunnelDisplayDiagnostics?.poll(job);
       dispatch(job);
       if (["completed", "failed", "cancelled"].includes(job.status)) { stopPolling(); return; }
       pollTimer = setTimeout(() => poll(id, token), 850);
@@ -34,14 +40,18 @@
 
   async function start(file, context, options = {}) {
     if (!file) throw new Error("没有选择视频文件。");
+    if (window.TunnelVideoReconstruction?.busy?.()) throw new Error("三维重建正在使用本机资源，请等当前建模完成后再导入新视频进行检测；原检测结果已保留。");
+    if (["uploading", "queued", "running"].includes(active?.status)) throw Error("当前视频检测仍在运行，请等完成后再导入新视频；原成果不会提前删除。");
+    const replaces = null; // 新导入保留旧视频档案，只切换当前工作视频。
+
     const token = ++sequence;
     stopPolling();
     active = {
-      id: null, status: "uploading", filename: file.name, batchId: context?.batchId || "", taskId: context?.taskId || "",
+      id: null, status: "uploading", replacingVideoId: replaces, filename: file.name, batchId: context?.batchId || "", taskId: context?.taskId || "",
       taskName: context?.taskName || "", createdAt: new Date().toISOString(), finishedAt: null,
       progress: { phase: "上传到本机推理服务", percent: 1, frames: 0, totalFrames: 0, candidates: 0 }, result: null, error: null,
     };
-    dispatch(active);
+    dispatch(active, { activate: true, replaces });
     if (location.protocol !== "http:" || !/^127\.0\.0\.1$|^localhost$/i.test(location.hostname)) {
       active = { ...active, status: "failed", error: localMessage(), progress: { ...active.progress, phase: "未连接本地推理服务", percent: 100 } };
       dispatch(active, { transportError: true });
@@ -49,6 +59,7 @@
     }
     const form = new FormData();
     form.append("video", file, file.name);
+
     form.append("batchId", context?.batchId || "");
     form.append("taskId", context?.taskId || "");
     form.append("taskName", context?.taskName || "");
@@ -56,12 +67,13 @@
     form.append("threshold", String(options.threshold || 0.7));
     form.append("device", options.device === "cuda" ? "cuda" : "cpu");
     try {
+      if (token !== sequence) return null;
       const response = await fetch(`${endpoint}/start`, { method: "POST", body: form, cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || `本地推理服务返回 HTTP ${response.status}。`);
       if (token !== sequence) return payload;
       active = payload;
-      dispatch(active);
+      dispatch(active, { activate: true, replacedVideo: replaces });
       pollTimer = setTimeout(() => poll(active.id, token), 250);
       return payload;
     } catch (error) {
@@ -75,5 +87,6 @@
 
   function current() { return active ? JSON.parse(JSON.stringify(active)) : null; }
   function reset() { ++sequence; stopPolling(); active = null; dispatch(null, { reset: true }); }
-  window.TunnelVideoInference = { start, current, reset, localMessage };
+  function resume(job) { if (!job?.id || !["queued", "running"].includes(job.status)) return; const token = ++sequence; stopPolling(); active = job; lastDispatched = ""; pollTimer = setTimeout(() => poll(job.id, token), 250); }
+  window.TunnelVideoInference = { start, current, reset, resume, localMessage, busy: () => ["uploading", "queued", "running"].includes(active?.status) };
 })();

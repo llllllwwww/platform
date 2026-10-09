@@ -1,5 +1,5 @@
-/* 隧雷智检 V2 工作台。静态离线应用：业务状态只在浏览器本地保存，不上传任何文件。 */
-(function () {
+/* 隧雷智检工作台：当前会话状态与本机业务档案分离，重启不自动选取历史数据。 */
+(async function () {
   "use strict";
   const C = window.TunnelCore,
     $ = (s) => document.querySelector(s),
@@ -41,18 +41,15 @@
     selectedRadar = 0,
     taskRunning = false;
   const taskPanels = { equipment: false, evidence: false };
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORE) || "null");
-    if (saved && saved.schemaVersion === 2) {
-      C.assess(saved);
-      state = saved;
-      state.tasks.forEach((t) => {
-        if (t.status === "running") t.status = "paused";
-      });
-    }
-  } catch (e) {
-    persistenceError = "本地缓存不可用或格式不兼容，已使用初始演示。";
-  }
+  let savedState = null;
+  try { savedState = JSON.parse(localStorage.getItem(STORE) || "null"); }
+  catch (_) { persistenceError = "原浏览器记录格式无效，已使用初始界面；原记录未删除。"; }
+  const startup = await window.TunnelWorkbenchSession.initialize(savedState, () => C.createState());
+  state = startup.state;
+  persistenceError = startup.warning || persistenceError;
+  state.tasks.forEach(t => { if (t.status === "running") t.status = "paused"; });
+  radarMode = "none";
+  let workbenchArchives = [];
   state.tasks.forEach((t) => {
     if (!t.batch) t.batch = "B202609";
   });
@@ -62,6 +59,20 @@
   state.simulation = state.simulation || {};
   state.processing = state.processing || {};
   state.videoInferenceJobs = state.videoInferenceJobs || {};
+  state.videoReconstructionJobs = state.videoReconstructionJobs || {};
+  state.videoJobsById = state.videoJobsById || {};
+  state.videoSelectionByContext = state.videoSelectionByContext || {};
+  state.videoCatalog = state.videoCatalog || [];
+  // 兼容旧缓存：以前每个业务任务只保存最后一次检测，现在保留每次视频导入的独立身份。
+  for (const [key, job] of Object.entries(state.videoInferenceJobs)) {
+    if (job?.id) state.videoJobsById[job.id] = job;
+    // 视频身份供手动选择；启动时不从历史任务推断当前视频。
+  }
+  state.retiredVideoIds = state.retiredVideoIds || [];
+  const videoBundles = new Map();
+  const videoWorkspaceErrors = new Map();
+  let workspaceLoadToken = 0, pendingVideoUpload = null;
+
   // 清理已经移除的识别模型选择；保留输入、数值处理结果与其他业务数据。
   function clearRetiredModelChoice(record) {
     if (!record || typeof record !== "object") return false;
@@ -290,10 +301,12 @@
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => el.classList.remove("show"), 3000);
   }
-  function save() {
+  function save(options = {}) {
     try {
+      if (!window.TunnelWorkbenchSession.canPersist()) return;
+      window.TunnelWorkbenchSession.saveTab(state);
       localStorage.setItem(STORE, JSON.stringify(state));
-      $("#saveStatus").textContent =
+      if (!options.quiet) $("#saveStatus").textContent =
         "已保存在本地 · " + new Date().toLocaleTimeString("zh-CN");
     } catch (e) {
       $("#saveStatus").textContent = "存储空间不足 · 本次状态仅保留在内存";
@@ -333,9 +346,11 @@
     return all().find((d) => d.id === state.selectedId) || all()[0];
   }
   function currentAlerts() {
+    if (videoContextMode()) return [];
     return state.alerts.filter((a) => a.batch === state.batch);
   }
   function ensureAlerts() {
+    if (videoContextMode()) return;
     const list = all();
     list
       .filter((d) => d.risk === "I" || d.risk === "II")
@@ -469,10 +484,187 @@
   function inferenceKey(batchId, taskId) {
     return `${batchId || state.batch}::${taskId || task().id}`;
   }
+  function videoSelection() { return state.videoSelectionByContext[inferenceKey(state.batch, task().id)] || { mode: "none", videoId: null }; }
+  function videoMode() { return videoSelection().mode === "video"; }
+  function noVideoSelected() { return videoSelection().mode === "none"; }
+  function videoContextMode() { return videoSelection().mode !== "demo"; }
   function currentVideoInference() {
-    const t = task();
-    const jobs = state.videoInferenceJobs || {};
-    return jobs[inferenceKey(state.batch, t.id)] || null;
+    if (!videoMode()) return null;
+    const selected = videoSelection();
+    const job = selected.videoId ? state.videoJobsById[selected.videoId] : pendingVideoUpload;
+    if (!job || job.batchId !== state.batch || job.taskId !== task().id) return null;
+    return window.TunnelVideoData.validateInference(job);
+  }
+  function currentVideoBundle() {
+    const bundle = videoMode() ? videoBundles.get(videoSelection().videoId) : null;
+    return bundle?.manifest?.context?.batchId === state.batch && bundle?.manifest?.context?.taskId === task().id ? bundle : null;
+  }
+  function videoPageData() {
+    const job = currentVideoInference();
+    return { job, rebuilt: currentVideoReconstruction(), bundle: currentVideoBundle(),
+      error: videoWorkspaceErrors.get(videoSelection().videoId), pending: !job?.id, unselected: noVideoSelected() };
+  }
+  function videoDataPage(name) {
+    return window.TunnelVideoData.pages(name, videoPageData(), { heading, panel, moduleTabs, btn, escape, fmt });
+  }
+  function updateVideoWorkspaceBar() {
+    const node = $("#videoWorkspaceBar");
+    if (!node) return;
+    const selected = videoSelection(), job = currentVideoInference();
+    const records = new Map(state.videoCatalog.filter(record => record.selectable !== false &&
+      ((!record.context?.batchId && !record.context?.taskId) || (record.context?.batchId === state.batch && record.context?.taskId === task().id)))
+      .map(record => [record.videoId, record]));
+    for (const archived of Object.values(state.videoJobsById)) {
+      if (archived.batchId === state.batch && archived.taskId === task().id) records.set(archived.id, { videoId: archived.id, filename: archived.filename, context: { batchId: archived.batchId, taskId: archived.taskId } });
+    }
+    const disabled = pendingVideoUpload?.status === "uploading" && videoMode() && !selected.videoId;
+    const title = noVideoSelected() ? "未选择视频 · 初始工作台" : videoMode() ? job?.filename || "等待导入视频" : "原有演示台账与建模案例";
+    const detail = noVideoSelected() ? "已有档案保留；选择录像、历史工作状态或独立演示后开始。" : videoMode() ? selected.videoId || "新视频上传中 · 下游等待本次成果" : "演示结果具有独立来源，不自动作为当前视频成果。";
+    node.innerHTML = `<div class="video-workspace-heading"><span class="badge ${videoMode() ? "mint" : noVideoSelected() ? "" : "amber"}">${noVideoSelected() ? "初始状态" : videoMode() ? "当前视频数据" : "独立演示模式"}</span><div><b>${escape(title)}</b><small>${escape(detail)}</small></div></div><div class="video-workspace-controls"><label for="videoDatasetSelect">数据来源<select id="videoDatasetSelect" aria-label="当前视频档案" ${disabled ? "disabled" : ""}><option value="__none" ${noVideoSelected() ? "selected" : ""}>未选择视频</option><option value="__demo" ${selected.mode === "demo" ? "selected" : ""}>独立演示台账 / 建模案例</option>${videoMode() && !selected.videoId ? '<option value="__pending" selected>本次上传 · 等待视频编号</option>' : ""}${Array.from(records.values()).map(record => `<option value="${escape(record.videoId)}" ${selected.videoId === record.videoId && videoMode() ? "selected" : ""}>${escape(record.filename)} · ${escape(record.videoId)}${record.context?.batchId ? "" : " · 待关联任务"}</option>`).join("")}</select></label>${btn("刷新档案目录", "video-refresh-catalog", "small subtle")}${videoMode() && selected.videoId ? btn("核验当前档案", "video-reload-data", "small subtle") : ""}${workbenchArchives.length ? `<label for="workbenchArchiveSelect">历史工作状态<select id="workbenchArchiveSelect" aria-label="历史工作状态"><option value="">手动加载历史工作状态</option>${workbenchArchives.map(row => `<option value="${escape(row.id)}">${escape(new Date(row.savedAt).toLocaleString("zh-CN"))} · 雷达 ${row.radarCount || 0} / 视频 ${row.videoCount || 0}</option>`).join("")}</select></label>${btn("加载工作状态", "workbench-load-archive", "small subtle")}` : ""}</div>`;
+    $("#videoDatasetSelect").onchange = event => selectVideoWorkspace(event.target.value).catch(error => toast(error.message, true));
+    if (noVideoSelected()) $("#dataBadge").textContent = "未选择数据";
+    else if (videoMode() && !["radar", "tasks"].includes(route)) $("#dataBadge").textContent = "当前视频 · 同源数据";
+  }
+  async function refreshWorkbenchArchives() {
+    workbenchArchives = await window.TunnelWorkbenchSession.list();
+    updateVideoWorkspaceBar();
+  }
+  async function restoreWorkbenchArchive() {
+    const id = $("#workbenchArchiveSelect")?.value;
+    if (!id) throw Error("请先选择一个历史工作状态。");
+    if (window.TunnelVideoInference?.busy?.() || window.TunnelVideoReconstruction?.busy?.()) throw Error("请等待当前检测或建模结束后再加载历史工作状态。");
+    const restored = await window.TunnelWorkbenchSession.load(id);
+    C.assess(restored);
+    await window.TunnelWorkbenchSession.archive(state, "before_manual_restore");
+    if (timer) clearInterval(timer);
+    timer = null; taskRunning = false; ++workspaceLoadToken; ++processingToken;
+    if (annotationSaveTimer) clearTimeout(annotationSaveTimer);
+    annotationSaveTimer = null;
+    window.TunnelVideoInference?.reset?.();
+    for (const jobId of Object.keys(state.videoReconstructionJobs)) window.TunnelVideoReconstruction?.forget?.(jobId);
+    window.TunnelVideoMonitor?.clearArchive?.();
+    const defaultPrefs = state.scenePrefs;
+    state = restored;
+    for (const key of ["processingByBatch", "simulationsByBatch", "simulation", "processing", "videoInferenceJobs", "videoReconstructionJobs", "videoJobsById", "videoSelectionByContext"]) state[key] = state[key] || {};
+    state.videoCatalog = state.videoCatalog || [];
+    state.scenePrefs = { ...defaultPrefs, ...(state.scenePrefs || {}) };
+    state.tasks.forEach(row => { if (row.status === "running") row.status = "paused"; });
+    window.TunnelEvidenceCore.init(state);
+    videoBundles.clear(); videoWorkspaceErrors.clear(); pendingVideoUpload = null;
+    processed = null; simResult = null; radarMode = "none"; selectedRadar = 0; trace = 80; palette = 1; zoom = 1;
+    metadataText = ""; importError = ""; importNotice = ""; simTab = "sample"; activeMultiscene = "overview";
+    save({ quiet: true }); render(); syncScene();
+    await Promise.all([refreshVideoCatalog(), refreshWorkbenchArchives()]);
+    if (videoMode() && videoSelection().videoId) await loadVideoWorkspace(videoSelection().videoId, { repaint: true });
+    toast("历史工作状态已手动加载，所有原档案仍保留。");
+  }
+  async function refreshVideoCatalog() {
+    const value = await window.TunnelVideoData.request("list");
+    if (!Array.isArray(value.videos)) throw Error("本机视频目录格式无效。");
+    state.videoCatalog = value.videos;
+    save({ quiet: true });
+    updateVideoWorkspaceBar();
+  }
+  async function loadVideoWorkspace(id, { repaint = false } = {}) {
+    if (!id) return;
+    const key = inferenceKey(state.batch, task().id), token = ++workspaceLoadToken;
+    try {
+      let bundle = window.TunnelVideoData.validateBundle(await window.TunnelVideoData.request(`detail?id=${encodeURIComponent(id)}`), id);
+      const known = state.videoJobsById[id];
+      if (!bundle.manifest.context.batchId && !bundle.manifest.context.taskId && known?.batchId === state.batch && known?.taskId === task().id) {
+        bundle = window.TunnelVideoData.validateBundle(await window.TunnelVideoData.request("bind", { videoId: id, batchId: known.batchId, taskId: known.taskId }), id);
+      }
+      if (token !== workspaceLoadToken || key !== inferenceKey(state.batch, task().id) || !videoMode() || videoSelection().videoId !== id || state.retiredVideoIds.includes(id)) return;
+      if (bundle.manifest.context.batchId !== state.batch || bundle.manifest.context.taskId !== task().id) throw Error("这个视频档案不属于当前批次和任务。");
+      if (state.videoJobsById[id]?.status === "completed" && ["queued", "running"].includes(bundle.inference.status)) return;
+      videoBundles.set(id, bundle);
+      videoWorkspaceErrors.delete(id);
+      state.videoJobsById[id] = bundle.inference;
+      const incoming = (bundle.acquisition?.records || []).filter(record => !(state.evidenceRecords || []).some(row => row.id === record.id));
+      if (incoming.length && !annotationSaveTimer) window.TunnelEvidenceCore.importData(state, evidenceContext(), { schemaVersion: 2, kind: "tunnel-evidence-correspondence", project: bundle.acquisition.project || state.project, context: evidenceContext(), records: incoming });
+      window.TunnelEvidenceCore.setSource(state, evidenceContext(), bundle.manifest.source.evidenceSourceId || "__no_current_video_source__");
+      window.TunnelEvidenceCore.setMode(state, evidenceContext(), "evidence");
+      if (["queued", "running"].includes(bundle.inference.status) && !window.TunnelVideoInference.current()) window.TunnelVideoInference.resume(bundle.inference);
+      if (bundle.reconstruction) state.videoReconstructionJobs[id] = bundle.reconstruction;
+      else delete state.videoReconstructionJobs[id];
+      save({ quiet: true });
+    } catch (error) {
+      if (token !== workspaceLoadToken || state.retiredVideoIds.includes(id)) return;
+      videoWorkspaceErrors.set(id, error.message);
+    }
+    if (token !== workspaceLoadToken || key !== inferenceKey(state.batch, task().id) || !videoMode() || videoSelection().videoId !== id) return;
+    if (route === "tasks") restoreSelectedVideoPlayback();
+    if (repaint && !["processing", "defects"].includes(route)) render();
+    else if (["processing", "defects"].includes(route)) { refreshVideoInferenceViews(); refreshVideoDecisions(); }
+  }
+  async function selectVideoWorkspace(id) {
+    ++workspaceLoadToken;
+    const key = inferenceKey(state.batch, task().id);
+    if (id === "__pending") return;
+    if (id === "__none") {
+      state.videoSelectionByContext[key] = { mode: "none", videoId: null };
+      pendingVideoUpload = null;
+      window.TunnelVideoInference?.reset?.();
+      window.TunnelEvidenceCore.setSource(state, evidenceContext(), "__no_current_video_source__");
+      window.TunnelEvidenceCore.setMode(state, evidenceContext(), "evidence");
+    } else if (id === "__demo") {
+      state.videoSelectionByContext[key] = { mode: "demo", videoId: state.videoSelectionByContext[key]?.videoId || null };
+      window.TunnelEvidenceCore.setMode(state, evidenceContext(), "demo");
+      window.TunnelEvidenceCore.setSource(state, evidenceContext(), "all");
+    } else {
+      const record = state.videoCatalog.find(row => row.videoId === id);
+      if (!state.videoJobsById[id] && !record) throw Error("这个视频尚未列入本机目录，请先刷新目录。");
+      state.retiredVideoIds = state.retiredVideoIds.filter(value => value !== id);
+      state.videoSelectionByContext[key] = { mode: "video", videoId: id };
+      activeMultiscene = "uploaded";
+      window.TunnelVideoMonitor?.clearArchive?.();
+      save({ quiet: true });
+      render();
+      if (record && !record.context?.batchId && !record.context?.taskId) {
+        // 旧成果只在用户明确选择之后关联到当前任务，不通过文件名猜测归属。
+        const bundle = window.TunnelVideoData.validateBundle(await window.TunnelVideoData.request("bind", { videoId: id, batchId: state.batch, taskId: task().id }), id);
+        state.videoJobsById[id] = bundle.inference;
+        videoBundles.set(id, bundle);
+      }
+    }
+    save({ quiet: true });
+    window.TunnelVideoMonitor?.clearArchive?.();
+    render();
+    if (!["__demo", "__none"].includes(id)) {
+      await loadVideoWorkspace(id, { repaint: true });
+      if (route === "tasks") restoreSelectedVideoPlayback();
+    }
+  }
+  function videoDecisionsMarkup() {
+    const bundle = currentVideoBundle(), job = currentVideoInference();
+    if (!bundle || job?.status !== "completed") return '<div class="video-data-empty"><b>本视频复核记录待加载</b><p>完成检测后，点击上方“核验当前档案”加载可追溯候选清单。</p></div>';
+    const decisions = bundle.review?.decisions || {};
+    const names = { pending: "待复核", confirmed_candidate: "确认候选（非确诊）", rejected: "排除候选" };
+    return `<div class="video-review-table"><table><thead><tr><th>本视频候选编号</th><th>采样帧 / 时间</th><th>候选复核</th></tr></thead><tbody>${(bundle.candidates || []).map(row => `<tr><td><code>${escape(row.id)}</code></td><td>${escape(row.imageName)} · ${Number(row.timeSec || 0).toFixed(2)} s</td><td><select data-video-decision="${escape(row.id)}" aria-label="${escape(row.id)}复核状态">${Object.entries(names).map(([value, title]) => `<option value="${value}" ${value === (decisions[row.id] || "pending") ? "selected" : ""}>${title}</option>`).join("")}</select></td></tr>`).join("") || '<tr><td colspan="3">本次采样未输出裂缝候选</td></tr>'}</tbody></table></div><label class="field">本视频备注<textarea id="videoReviewNotes" maxlength="4000" rows="3">${escape(bundle.review?.notes || "")}</textarea></label><div class="actions">${btn("保存本视频复核与备注", "video-save-review", "primary")}</div><p class="muted">保存到本视频 <code>review/decisions.json</code>；人工确认候选不等于工程确诊，不自动生成 SHI。</p>`;
+  }
+  function restoreSelectedVideoPlayback() {
+    const job = currentVideoInference(), bundle = currentVideoBundle();
+    if (route !== "tasks" || !job?.id || !bundle?.manifest?.source?.available) return;
+    const identity = window.TunnelVideoMonitor?.evidenceIdentity();
+    if (identity?.videoId === job.id) return;
+    window.TunnelVideoMonitor?.openArchive({ videoId: job.id, filename: job.filename,
+      sourceId: bundle.manifest.source.evidenceSourceId || "VF-" + bundle.manifest.source.sha256,
+      url: location.origin + "/api/video-workspace/media?id=" + encodeURIComponent(job.id) }).catch(error => toast(error.message, true));
+  }
+  function refreshVideoDecisions() {
+    const target = $("#videoDecisions");
+    if (target && videoMode()) patchVideoInferenceMarkup(target, `<div id="videoDecisions">${videoDecisionsMarkup()}</div>`);
+  }
+  async function saveVideoReview() {
+    const bundle = currentVideoBundle(), job = currentVideoInference();
+    if (!bundle || !job?.id) throw Error("请先加载当前视频档案。");
+    const decisions = Object.fromEntries($$("[data-video-decision]").map(select => [select.dataset.videoDecision, select.value]));
+    const value = await window.TunnelVideoData.request("review", { videoId: job.id, batchId: job.batchId, taskId: job.taskId,
+      sourceSha256: bundle.manifest.source.sha256, detectionRevision: bundle.manifest.stages.detection.revision,
+      decisions, notes: $("#videoReviewNotes")?.value || "" });
+    videoBundles.set(job.id, window.TunnelVideoData.validateBundle(value, job.id));
+    if (videoMode() && videoSelection().videoId === job.id) refreshVideoDecisions();
+    toast("已保存到这个视频的复核子目录。");
   }
   function inferenceStatus(job) {
     return ({ uploading: "上传中", queued: "排队中", running: "Python 推理中", completed: "已完成", failed: "推理失败", cancelled: "已取消" })[job?.status] || "尚未启动";
@@ -484,13 +676,14 @@
     const result = job.result || {};
     const success = job.status === "completed";
     const failed = job.status === "failed";
+    const jsonReady = success && result.jsonUrl;
     return `<div id="videoInferenceStatus" class="video-inference-status ${success ? "is-complete" : failed ? "is-failed" : "is-running"}">
-      <div class="inference-status-head"><div><span class="status-kicker">PYTHON / LOCAL INFERENCE</span><strong>${escape(inferenceStatus(job))}</strong><small>${escape(job.filename || "现场视频")}</small></div><span class="badge ${success ? "mint" : failed ? "coral" : "amber"}">${Math.round(progress)}%</span></div>
-      <div class="inference-progress"><span style="width:${progress}%"></span></div>
-      <div class="inference-stats"><span><b>${escape(p.phase || "准备中")}</b><small>当前阶段</small></span><span><b>${p.frames || 0}${p.totalFrames ? ` / ${p.totalFrames}` : ""}</b><small>代表帧</small></span><span><b>${result.candidateCount ?? p.candidates ?? 0}</b><small>裂缝候选</small></span></div>
-      ${failed ? `<div class="note warning inference-error">${escape(job.error || "Python 推理失败，请检查算法环境和视频格式。")}</div>` : ""}
-      ${success ? `<div class="inference-result-line"><span>结果已写入“多相机建模与裂缝候选复核”</span><span class="muted">${result.frameCount || 0} 帧 · ${result.candidateCount || 0} 个候选</span></div>` : ""}
-      ${compact ? `<div class="actions inference-actions">${btn("打开候选复核", "open-video-inference", "primary")}${success && result.jsonUrl ? `<a class="btn subtle" href="${escape(result.jsonUrl)}" target="_blank" rel="noopener">查看 JSON ↗</a>` : ""}</div>` : ""}
+      <div class="inference-status-head"><div><span class="status-kicker">PYTHON / LOCAL INFERENCE</span><strong data-inference-field="status">${escape(inferenceStatus(job))}</strong><small data-inference-field="filename">${escape(job.filename || "现场视频")}</small></div><span data-inference-field="percent" class="badge ${success ? "mint" : failed ? "coral" : "amber"}">${Math.round(progress)}%</span></div>
+      <div class="inference-progress"><span data-inference-field="bar" style="width:${progress}%"></span></div>
+      <div class="inference-stats"><span><b data-inference-field="phase">${escape(p.phase || "准备中")}</b><small>当前阶段</small></span><span><b data-inference-field="frames">${p.frames || 0}${p.totalFrames ? ` / ${p.totalFrames}` : ""}</b><small>代表帧</small></span><span><b data-inference-field="candidates">${result.candidateCount ?? p.candidates ?? 0}</b><small>裂缝候选</small></span></div>
+      <div class="note warning inference-error" data-inference-field="error" ${failed ? "" : "hidden"}>${failed ? escape(job.error || "视频推理未完成，请检查本机环境与服务日志。") : ""}</div>
+      <div class="inference-result-line" data-inference-field="result" ${success ? "" : "hidden"}><span>结果已写入多相机建模与裂缝候选复核。</span><span class="muted" data-inference-field="result-counts">${result.frameCount || 0} 帧 · ${result.candidateCount || 0} 个候选</span></div>
+      ${compact ? `<div class="actions inference-actions">${btn("打开候选复核", "open-video-inference", "primary")}<a data-inference-field="json" class="btn subtle" href="${escape(jsonReady ? result.jsonUrl : "#")}" target="_blank" rel="noopener" ${jsonReady ? "" : "hidden"}>查看 JSON ↗</a></div>` : ""}
     </div>`;
   }
   function videoInferenceReviewMarkup(job) {
@@ -499,23 +692,198 @@
     const preview = Array.isArray(result.preview) ? result.preview : [];
     const cards = preview.length ? preview.map((item) => `<figure class="inference-candidate-card"><img loading="lazy" src="${escape(item.overlayUrl || item.frameUrl || "")}" alt="${escape(item.imageName || "候选帧")}"/><figcaption><b>${escape(item.id || "候选观测")}</b><span>${item.timeSec == null ? "时间不可用" : fmt(item.timeSec, 2) + " s"} · 置信度 ${fmt(Number(item.confidence || 0), 3)}</span><small>${escape(item.imageName || "")}</small></figcaption></figure>`).join("") : `<div class="empty"><b>当前没有候选区域</b>模型已完成 ${result.frameCount || 0} 帧推理，可打开 JSON 查看完整逐帧结果。</div>`;
     return `<section id="videoInferenceReview" class="video-inference-review ${job.status === "completed" ? "is-complete" : job.status === "failed" ? "is-failed" : "is-running"}">
-      <div class="inference-review-head"><div><span class="status-kicker">LATEST UPLOAD / ${escape(job.taskId || "TASK")}</span><h3>本次导入视频 · 裂缝候选输出</h3><p>${escape(job.filename || "现场视频")} · ${escape(inferenceStatus(job))}</p></div><div class="inference-review-actions">${job.status === "completed" && result.jsonUrl ? `<a class="btn subtle small" href="${escape(result.jsonUrl)}" target="_blank" rel="noopener">查看完整 JSON ↗</a>` : ""}</div></div>
+      <div class="inference-review-head"><div><span class="status-kicker" data-inference-review="task">CURRENT VIDEO / ${escape(job.taskId || "TASK")}</span><h3>本次导入视频 · 裂缝候选输出</h3><p data-inference-review="description">${escape(job.filename || "现场视频")} · ${escape(inferenceStatus(job))}</p></div><div class="inference-review-actions">${job.status === "completed" && result.jsonUrl ? `<a class="btn subtle small" href="${escape(result.jsonUrl)}" target="_blank" rel="noopener">查看完整 JSON ↗</a>` : ""}</div></div>
       ${job.status === "completed" ? `<div class="inference-review-kpis"><span><b>${result.frameCount || 0}</b><small>采样帧</small></span><span><b>${result.candidateCount || 0}</b><small>候选观测</small></span><span><b>${escape(job.detector?.device || "cpu")}</b><small>推理设备</small></span><span><b>${fmt(Number(job.detector?.threshold || 0.7), 2)}</b><small>阈值</small></span></div><div class="inference-candidate-grid">${cards}</div>` : videoInferenceStatusMarkup(job)}
-      <p class="muted inference-boundary">红色叠加区域表示模型输出的裂缝候选，不是确诊病害；确认候选后再进入病害清单和三维定位。当前上传视频结果与下方多场景建模案例共用第二模块复核入口。</p>
+      <p class="muted inference-boundary">红色叠加区域表示模型输出的裂缝候选，不是确诊病害；确认候选后再进入病害清单和三维定位。当前视频结果与已有案例分别保存；可通过页面上方的数据来源选择独立演示模式查看案例。</p>
     </section>`;
   }
+  // 状态轮询只同步推理卡片；保留页面、输入框、Canvas 和 iframe 的现有节点。
+  // 相同状态不写入 DOM，进度改变也不会重播整页入场动画或重新加载复核场景。
+  function patchVideoInferenceMarkup(target, markup) {
+    if (!target) return;
+    const template = document.createElement("template");
+    template.innerHTML = markup.trim();
+    const next = template.content.firstElementChild;
+    if (!next) return;
+    const syncNode = (current, incoming) => {
+      if (current.isEqualNode(incoming)) return;
+      if (current.nodeType !== incoming.nodeType || current.nodeName !== incoming.nodeName) {
+        current.replaceWith(incoming.cloneNode(true));
+        return;
+      }
+      if (current.nodeType !== Node.ELEMENT_NODE) {
+        current.nodeValue = incoming.nodeValue;
+        return;
+      }
+      for (const attribute of Array.from(current.attributes)) {
+        if (!incoming.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
+      }
+      for (const attribute of incoming.attributes) {
+        if (current.getAttribute(attribute.name) !== attribute.value) {
+          current.setAttribute(attribute.name, attribute.value);
+        }
+      }
+      Array.from(incoming.childNodes).forEach((child, index) => {
+        const existing = current.childNodes[index];
+        if (existing) syncNode(existing, child);
+        else current.appendChild(child.cloneNode(true));
+      });
+      while (current.childNodes.length > incoming.childNodes.length) {
+        current.lastChild.remove();
+      }
+    };
+    syncNode(target, next);
+  }
+  // 持续运行时直接更新固定字段；不解析或重建进度卡片 HTML。
+  function updateVideoInferenceStatus(node, job, compact = false) {
+    if (!node) return;
+    if (!job || !node.querySelector('[data-inference-field="status"]')) {
+      patchVideoInferenceMarkup(node, videoInferenceStatusMarkup(job, compact));
+      return;
+    }
+    const p = job.progress || {}, result = job.result || {};
+    const progress = Math.max(0, Math.min(100, Number(p.percent || 0)));
+    const success = job.status === "completed", failed = job.status === "failed";
+    const field = name => node.querySelector(`[data-inference-field="${name}"]`);
+    const text = (name, value) => {
+      const element = field(name), next = String(value);
+      if (element && element.textContent !== next) element.textContent = next;
+    };
+    const className = "video-inference-status " + (success ? "is-complete" : failed ? "is-failed" : "is-running");
+    if (node.className !== className) node.className = className;
+    text("status", inferenceStatus(job));
+    text("filename", job.filename || "现场视频");
+    text("percent", Math.round(progress) + "%");
+    text("phase", p.phase || "准备中");
+    text("frames", `${p.frames || 0}${p.totalFrames ? ` / ${p.totalFrames}` : ""}`);
+    text("candidates", result.candidateCount ?? p.candidates ?? 0);
+    const badgeClass = "badge " + (success ? "mint" : failed ? "coral" : "amber");
+    if (field("percent").className !== badgeClass) field("percent").className = badgeClass;
+    if (field("bar").style.width !== progress + "%") field("bar").style.width = progress + "%";
+    text("error", failed ? job.error || "视频推理未完成，请检查本机环境与服务日志。" : "");
+    if (field("error").hidden !== !failed) field("error").hidden = !failed;
+    text("result-counts", `${result.frameCount || 0} 帧 · ${result.candidateCount || 0} 个候选`);
+    if (field("result").hidden !== !success) field("result").hidden = !success;
+    const json = field("json");
+    if (json) {
+      const href = success && result.jsonUrl ? result.jsonUrl : "#";
+      if (json.getAttribute("href") !== href) json.setAttribute("href", href);
+      const hidden = !(success && result.jsonUrl);
+      if (json.hidden !== hidden) json.hidden = hidden;
+    }
+  }
+  function refreshVideoInferenceViews() {
+    const job = currentVideoInference();
+    const review = $("#videoInferenceReview");
+    if (review) {
+      const status = review.querySelector("#videoInferenceStatus");
+      const description = review.querySelector('[data-inference-review="description"]');
+      if (job && job.status !== "completed" && status && description) {
+        const className = "video-inference-review " + (job.status === "failed" ? "is-failed" : "is-running");
+        if (review.className !== className) review.className = className;
+        const label = review.querySelector('[data-inference-review="task"]');
+        const taskLabel = "CURRENT VIDEO / " + (job.taskId || "TASK");
+        const summary = `${job.filename || "现场视频"} · ${inferenceStatus(job)}`;
+        if (label.textContent !== taskLabel) label.textContent = taskLabel;
+        if (description.textContent !== summary) description.textContent = summary;
+        updateVideoInferenceStatus(status, job);
+      } else {
+        // 初次显示或产生最终候选时才变更复核区结构，保留外部 iframe。
+        patchVideoInferenceMarkup(review, videoInferenceReviewMarkup(job));
+      }
+    } else updateVideoInferenceStatus($("#videoInferenceStatus"), job, true);
+    refreshReconstructionViews();
+  }
+  function currentVideoReconstruction() {
+    const source = currentVideoInference();
+    const job = source?.id && source.status === "completed" ? window.TunnelVideoData.validateReconstruction(state.videoReconstructionJobs[source.id]) : null;
+    return job && job.batchId === state.batch && job.taskId === task().id ? job : null;
+  }
+  function reconstructionMarkup(source, compact = false) {
+    const job = currentVideoReconstruction(), ready = source?.status === "completed";
+    const busy = ["queued", "running"].includes(job?.status), complete = job?.status === "completed";
+    const reconnect = !!job?.connectionError, failed = job?.status === "failed";
+    const result = job?.result || {}, progress = job?.progress || {};
+    return `<section id="videoReconstructionStatus" class="video-reconstruction-card ${compact ? "is-compact" : ""}" aria-label="本次视频三维重建与定位">
+      <div class="reconstruction-head"><div><span class="status-kicker">MANUAL / VIDEO TO GEOMETRY</span><h3>三维重建与定位</h3><p>检测完成后手动启动；复用本次候选并补抽相邻帧，恢复相机位姿、稀疏地标与局部观测表面。</p></div><span class="badge" data-reconstruction-field="status">${reconnect ? "连接中断" : complete ? "已完成" : busy ? "建模中" : failed ? "未完成" : ready ? "可启动" : "等待检测"}</span></div>
+      <div class="reconstruction-controls"><label for="reconstructionFrames">补抽建模帧<select id="reconstructionFrames" ${busy || complete ? "disabled" : ""}>${[24, 48, 72].map(n => `<option value="${n}" ${n === Number(job?.maxFrames || 24) ? "selected" : ""}>${n} 帧${n === 24 ? " · 推荐" : ""}</option>`).join("")}</select></label><button type="button" class="btn primary" data-action="start-video-reconstruction" ${!ready || (busy && !reconnect) || complete ? "disabled" : ""} data-reconstruction-field="start">${reconnect ? "重新连接任务状态" : busy ? "正在重建与定位…" : complete ? "本次重建已完成" : failed ? "重试三维重建与定位" : "运行三维重建与定位"}</button></div>
+      <div class="inference-progress reconstruction-progress"><span data-reconstruction-field="bar" style="width:${Number(progress.percent || 0)}%"></span></div>
+      <div class="reconstruction-phase"><span data-reconstruction-field="phase">${escape(progress.phase || (ready ? "检测已完成，等待手动建模" : "请先导入视频并等待裂缝检测完成"))}</span><b data-reconstruction-field="percent">${Number(progress.percent || 0)}%</b></div>
+      <div class="inference-stats"><span><b data-reconstruction-field="frames">${result.registeredFrames ?? progress.registeredFrames ?? 0}</b><small>注册相机帧</small></span><span><b data-reconstruction-field="points">${result.sparsePoints ?? progress.sparsePoints ?? 0}</b><small>稀疏地标</small></span><span><b data-reconstruction-field="localized">${result.localizedCandidates ?? progress.localizedCandidates ?? 0}</b><small>有坐标的候选观测</small></span></div>
+      <div class="note warning" data-reconstruction-field="error" ${failed || reconnect ? "" : "hidden"}>${escape(job?.error || job?.connectionError || "")}</div>
+      <div class="reconstruction-result" data-reconstruction-field="result" ${complete ? "" : "hidden"}><p data-reconstruction-field="summary">${complete ? `注册 ${result.registeredFrames}/${result.totalFrames} 帧；${result.localizedCandidates}/${result.candidateCount} 个候选观测获得局部几何支撑，其余保留未定位。` : ""}</p><div class="actions"><button class="btn primary" data-action="open-video-reconstruction">打开本次视频三维复核</button><a class="btn subtle" data-reconstruction-field="json" href="${escape(result.jsonUrl || "#")}" target="_blank" rel="noopener">定位 JSON ↗</a><a class="btn subtle" data-reconstruction-field="quality" href="${escape(result.qualityUrl || "#")}" target="_blank" rel="noopener">几何质量 ↗</a></div></div>
+      <a class="btn subtle small" data-reconstruction-field="log" href="${escape(result.logUrl || job?.logUrl || "#")}" target="_blank" rel="noopener" ${failed || complete ? "" : "hidden"}>本次建模日志 ↗</a>
+      <p class="reconstruction-limit">CPU 输出为稀疏重建与局部表面定位；单目相对尺度，未覆盖区域保持未定位。结果用于候选复核，不自动写入病害台账或工程里程。</p>
+    </section>`;
+  }
+  function refreshReconstructionViews() {
+    const node = $("#videoReconstructionStatus");
+    if (node) patchVideoInferenceMarkup(node, reconstructionMarkup(currentVideoInference(), route === "processing"));
+    const complete = currentVideoReconstruction()?.status === "completed";
+    const sceneHost = $("#currentVideoScene");
+    if (sceneHost && videoMode()) {
+      const result = currentVideoReconstruction()?.result;
+      const frame = sceneHost.querySelector("iframe");
+      if (complete && result?.viewerUrl) {
+        if (!frame) patchVideoInferenceMarkup(sceneHost, `<div class="video-current-scene" id="currentVideoScene"><iframe id="multisceneFrame" class="multiscene-frame" src="${escape(result.viewerUrl)}" title="本视频三维重建与定位" loading="eager"></iframe></div>`);
+        else if (frame.getAttribute("src") !== result.viewerUrl) frame.src = result.viewerUrl;
+      } else if (frame) patchVideoInferenceMarkup(sceneHost, '<div class="video-current-scene" id="currentVideoScene"><div class="video-data-empty"><b>等待本视频三维成果</b><p>此处只加载当前视频模型；已有建模案例在独立演示模式中查看。</p></div></div>');
+    }
+    const tab = $("#uploadedSceneTab");
+    if (tab && tab.hidden === complete) tab.hidden = !complete;
+    // 新视频进入同一业务任务时，旧视频模型不再留在当前结果窗口中。
+    if (activeMultiscene === "uploaded" && !complete) {
+      activeMultiscene = videoMode() ? "uploaded" : "overview";
+      const frame = $("#multisceneFrame");
+      if (frame && videoMode()) frame.remove();
+      else if (frame) { frame.src = multisceneEntries[0].src; frame.title = multisceneEntries[0].label; }
+      $$(".multiscene-switcher [data-scene]").forEach(button => {
+        const active = button.dataset.scene === "overview";
+        button.classList.toggle("primary", active); button.classList.toggle("subtle", !active);
+        button.setAttribute("aria-selected", String(active));
+      });
+    }
+  }
+  function openReconstructedScene() {
+    const job = currentVideoReconstruction();
+    if (job?.status !== "completed" || !job.result?.viewerUrl) throw Error("本次视频尚未产生可查看的三维重建结果。");
+    activeMultiscene = "uploaded";
+    if (route !== "defects") {
+      navigate("defects");
+      requestAnimationFrame(() => scrollToAnchor("multisceneFrame"));
+      return;
+    }
+    const frame = $("#multisceneFrame");
+    if (frame && frame.getAttribute("src") !== job.result.viewerUrl) {
+      frame.src = job.result.viewerUrl;
+      frame.title = "本次视频三维重建与定位";
+    }
+    $$(".multiscene-switcher [data-scene]").forEach(button => {
+      const active = button.dataset.scene === "uploaded";
+      button.classList.toggle("primary", active); button.classList.toggle("subtle", !active);
+      button.setAttribute("aria-selected", String(active));
+    });
+    scrollToAnchor("multisceneFrame");
+  }
   function multiscenePanel() {
-    const active =
-      multisceneEntries.find((entry) => entry.id === activeMultiscene) ||
-      multisceneEntries[0];
+    const rebuilt = currentVideoReconstruction();
+    if (videoMode()) {
+      const model = rebuilt?.status === "completed" && rebuilt.result?.viewerUrl;
+      return `<div id="image-review" class="image-review-anchor">${panel("多相机建模与裂缝候选复核 · 当前视频",
+        videoInferenceReviewMarkup(currentVideoInference()) + reconstructionMarkup(currentVideoInference()) +
+        `<div class="video-current-scene" id="currentVideoScene">${model ? `<iframe id="multisceneFrame" class="multiscene-frame" src="${escape(rebuilt.result.viewerUrl)}" title="本视频三维重建与定位" loading="eager"></iframe>` : '<div class="video-data-empty"><b>等待本视频三维成果</b><p>此处只加载当前视频模型；已有建模案例在独立演示模式中查看。</p></div>'}</div>`, '<span class="badge mint">当前视频独立成果</span>', false)}</div>${panel("本视频候选复核与备注", `<div id="videoDecisions">${videoDecisionsMarkup()}</div>`)}`;
+    }
+    const active = activeMultiscene === "uploaded" && rebuilt?.status === "completed"
+      ? { id: "uploaded", label: "本次视频重建", src: rebuilt.result.viewerUrl }
+      : multisceneEntries.find((entry) => entry.id === activeMultiscene) || multisceneEntries[0];
     return `<div id="image-review" class="image-review-anchor">${panel(
       "多相机建模与裂缝候选复核",
-      `<div class="review-context"><span class="badge mint">02 / 智能解析</span><span>自动推理结果、原始影像、三维表面与同帧证据复核</span></div>${videoInferenceReviewMarkup(currentVideoInference())}<div class="multiscene-switcher" role="tablist" aria-label="多相机建模与裂缝候选复核场景">${multisceneEntries
+      `<div class="review-context"><span class="badge mint">02 / 智能解析</span><span>自动推理结果、原始影像、三维表面与同帧证据复核</span></div>${videoInferenceReviewMarkup(currentVideoInference())}${reconstructionMarkup(currentVideoInference())}<div class="multiscene-switcher" role="tablist" aria-label="多相机建模与裂缝候选复核场景">${multisceneEntries
         .map(
           (entry) =>
             `<button class="small ${entry.id === active.id ? "primary" : "subtle"}" data-action="multiscene-select" data-scene="${entry.id}" role="tab" aria-selected="${entry.id === active.id}">${entry.label}</button>`,
         )
-        .join("")}</div><div class="multiscene-frame-wrap"><iframe id="multisceneFrame" title="${active.label}" src="${active.src}" loading="lazy"></iframe></div><p class="muted multiscene-note">该复核区属于智能解析模块，用于把识别候选与原始影像、三维表面和相邻帧证据对应起来；三维数字孪生模块继续负责工程空间定位、健康评估和运维决策。页面保留 algorithm/web/multiscene 中原有的场景切换、三维旋转、候选筛选、帧证据和录像回放，不覆盖原始文件。</p>`,
+        .join("")}<button id="uploadedSceneTab" class="small ${active.id === "uploaded" ? "primary" : "subtle"}" data-action="open-video-reconstruction" data-scene="uploaded" role="tab" aria-selected="${active.id === "uploaded"}" ${rebuilt?.status === "completed" ? "" : "hidden"}>本次视频重建</button></div><div class="multiscene-frame-wrap"><iframe id="multisceneFrame" title="${active.label}" src="${active.src}" loading="lazy"></iframe></div><p class="muted multiscene-note">该复核区属于智能解析模块，用于把识别候选与原始影像、三维表面和相邻帧证据对应起来；三维数字孪生模块继续负责工程空间定位、健康评估和运维决策。页面保留 algorithm/web/multiscene 中原有的场景切换、三维旋转、候选筛选、帧证据和录像回放，不覆盖原始文件。</p>`,
       btn("返回病害清单", "scroll-defects-top", "small subtle"),
       false,
     )}</div>`;
@@ -532,9 +900,36 @@
     post({ type });
     $("#twinFrame")?.contentWindow?.focus();
   }
-  function evidenceContext(){const t=task();return {batchId:state.batch,taskId:t.id,start:t.start,end:t.end};}
-  function evidenceActive(){return ["tasks","twin"].includes(route)&&window.TunnelEvidenceCore.mode(state,evidenceContext())==="evidence";}
+  function evidenceContext(){const t=task();return {batchId:state.batch,taskId:t.id,start:t.start,end:t.end,
+    get videoSourceId(){
+      if (route === "radar") return null;
+      const identity = window.TunnelVideoMonitor?.evidenceIdentity();
+      // 检测采集页可先导入现场视频、再决定是否关联到视频档案；此时仍要让疑似位置在仿真侧可见。
+      if (route === "tasks" && !videoMode() && identity?.ready && identity.sourceId && identity.batchId === state.batch && identity.taskId === t.id) return identity.sourceId;
+      if (noVideoSelected()) return "__no_current_video_source__";
+      if (!videoMode()) return null;
+      const job = currentVideoInference(), bundle = currentVideoBundle();
+      return job?.liveSourceId || bundle?.manifest?.source?.evidenceSourceId || job?.evidenceSourceId || (job?.sourceSha256 ? "VF-" + job.sourceSha256 : null) ||
+        (identity?.ready && identity.videoId === job?.id ? identity.sourceId : "__no_current_video_source__");
+    }};}
+  function evidenceActive(){return ["tasks","twin"].includes(route)&&(videoMode()||window.TunnelEvidenceCore.mode(state,evidenceContext())==="evidence");}
+  let annotationSaveTimer = null;
+  function saveVideoAnnotations() {
+    if (annotationSaveTimer) clearTimeout(annotationSaveTimer);
+    const job = currentVideoInference(), bundle = currentVideoBundle();
+    if (!videoMode() || route === "radar" || !job?.id || !bundle?.manifest?.source?.sha256) return;
+    const owner = bundle.manifest.source.evidenceSourceId;
+    const records = (state.evidenceRecords || []).filter(record => record.batchId === job.batchId && record.taskId === job.taskId && record.anchors.some(anchor => anchor.kind === "video" && anchor.sourceId === owner)).map(record => ({ ...record, anchors: record.anchors.filter(anchor => anchor.kind === "video" && anchor.sourceId === owner) }));
+    annotationSaveTimer = setTimeout(async () => {
+      annotationSaveTimer = null;
+      try {
+        const saved = window.TunnelVideoData.validateBundle(await window.TunnelVideoData.request("annotations", { videoId: job.id, batchId: job.batchId, taskId: job.taskId, sourceSha256: bundle.manifest.source.sha256, records }), job.id);
+        if (!state.retiredVideoIds.includes(job.id)) videoBundles.set(job.id, saved);
+      } catch (error) { if (videoSelection().videoId === job.id) toast("视频标注暂未写入本机档案：" + error.message, true); }
+    }, 350);
+  }
   function refreshEvidenceViews(){
+    saveVideoAnnotations();
     const needsTwinLayout=route==="twin"&&(evidenceActive()!==!!$("#evidenceUnfold"));
     if(route==="radar"||needsTwinLayout)render();else {window.TunnelEvidenceLink.refresh();drawCanvases();}
     syncScene();
@@ -549,11 +944,11 @@
     const a = C.assess(state);
     post({
       type: "sync",
-      defects: evidenceActive() ? window.TunnelEvidenceCore.scene(state, evidenceContext(), {positionOnly:route==="tasks"}) : C.getDefects(state),
+      defects: evidenceActive() ? window.TunnelEvidenceCore.scene(state, evidenceContext(), {positionOnly:route==="tasks"}) : noVideoSelected() ? [] : C.getDefects(state),
       selectedId: evidenceActive() ? state.evidenceSelectedId : state.selectedId,
       evidenceMode: evidenceActive(),
-      shi: a.shi,
-      risk: a.risk,
+      shi: videoContextMode() ? null : a.shi,
+      risk: videoContextMode() ? "unrated" : a.risk,
       batch: state.batch,
     });
     syncTask();
@@ -680,6 +1075,8 @@
       : '<div class="empty">开始检测或处理预警后，操作记录会显示在这里。</div>';
   }
   function overview() {
+    if (noVideoSelected()) return videoDataPage("overview");
+    if (videoMode()) return videoDataPage("overview");
     const a = C.assess(state),
       t = task(),
       ads = currentAlerts().filter((x) => x.status !== "closed"),
@@ -765,10 +1162,12 @@
   function radarData() {
     if (radarMode === "import" && state.radars[selectedRadar]?.batchId === state.batch)
       return state.radars[selectedRadar];
+    if (radarMode === "none") return { id: "__none", name: "未选择雷达数据", source: "empty", rows: 96, cols: 160,
+      matrix: Array.from({ length: 96 }, () => Array(160).fill(0)), metadata: {}, warnings: ["请先接入或选择雷达数据。"], axes: { x: "道号", y: "采样点" } };
     return radarDemoData();
   }
   function radarOptions() {
-    return `<label>当前数据 <select id="radarSource" aria-label="选择雷达数据"><option value="demo" ${radarMode === "demo" ? "selected" : ""}>内置示意 · ${chosen().lineId} / ${chosen().id}</option>${state.radars.map((r, i) => (r.batchId !== state.batch ? "" : `<option value="${i}" ${radarMode === "import" && selectedRadar === i ? "selected" : ""}>外部快照 · ${escape(r.name)}</option>`)).join("")}</select></label>`;
+    return `<label>当前数据 <select id="radarSource" aria-label="选择雷达数据"><option value="none" ${radarMode === "none" ? "selected" : ""}>未选择雷达数据</option><option value="demo" ${radarMode === "demo" ? "selected" : ""}>内置示意 · ${chosen().lineId} / ${chosen().id}</option>${state.radars.map((r, i) => (r.batchId !== state.batch ? "" : `<option value="${i}" ${radarMode === "import" && selectedRadar === i ? "selected" : ""}>外部快照 · ${escape(r.name)}</option>`)).join("")}</select></label>`;
   }
   function radarControls(demoOnly = false) {
     const r = demoOnly ? radarDemoData() : radarData();
@@ -804,11 +1203,11 @@
       ready = processed && processed.input === r.id,
       videoJob = currentVideoInference();
     const radarFlow = `<div class="flow processing-flow">${[
-      ["原始数据", r.source === "import" ? radarTransportLabel(r) + " · 外部快照" : "内置示意", "已加载"],
-      ["数值预处理", "减背景 + 时间增益", ready ? "已完成" : "可运行"],
+      ["原始数据", r.source === "empty" ? "等待选择矩阵" : r.source === "import" ? radarTransportLabel(r) + " · 外部快照" : "内置示意", r.source === "empty" ? "未选择" : "已加载"],
+      ["数值预处理", "减背景 + 时间增益", ready ? "已完成" : r.source === "empty" ? "等待输入" : "可运行"],
       ["RCAN 杂波抑制", "残差通道注意网络", "待接入"],
       ["RTM 逆时偏移", "全波方程成像接口", "待接入"],
-    ].map((item, i) => `<div class="flow-step ${i === 0 || (i === 1 && ready) ? "done" : ""}"><span class="step-num">STEP 0${i + 1}</span><b>${item[0]}</b><small>${item[1]}</small><span class="badge ${i === 0 || (i === 1 && ready) ? "mint" : ""}">${item[2]}</span></div>`).join("")}</div>`;
+    ].map((item, i) => `<div class="flow-step ${(i === 0 && r.source !== "empty") || (i === 1 && ready) ? "done" : ""}"><span class="step-num">STEP 0${i + 1}</span><b>${item[0]}</b><small>${item[1]}</small><span class="badge ${(i === 0 && r.source !== "empty") || (i === 1 && ready) ? "mint" : ""}">${item[2]}</span></div>`).join("")}</div>`;
     return heading(
       "智能处理工作流",
       "视频与雷达在本阶段分开处理：视频自动调用本机 Python 输出裂缝候选，雷达执行已接入的数值预处理并保留后端接口。",
@@ -819,8 +1218,8 @@
     ) + moduleTabs() +
       `<div class="processing-dashboard" aria-label="智能解析工作台">
         <div class="processing-primary">
-          ${panel("影像检测 · Python 自动推理", `<div id="currentImageAlgorithm" class="image-algorithm-card"><div class="algorithm-card-head"><div><span class="status-kicker">VIDEO / CRACK CANDIDATE</span><h3>crack-seg U-Net · 裂缝分割</h3><p class="muted">导入现场视频后，平台把录像上传到本机 Python 服务，按采样帧调用 <code>algorithm/defect_detect.py</code>，输出掩码、候选观测和可复核 JSON。</p></div><span class="badge mint">自动启动</span></div>${videoInferenceStatusMarkup(videoJob, true)}<div class="actions">${btn("进入多相机候选复核", "open-video-inference", "primary")}<a class="btn subtle" href="algorithm/README.md" target="_blank" rel="noopener">查看算法说明 ↗</a></div></div>`, '<span class="badge mint">本机 Python</span>')}
-          ${panel("雷达处理 · 外部矩阵", `${radarControls()}${radarFlow}<div class="grid-3 processing-output-grid">${panel("原始输入", `<div class="radar-wrap"><canvas id="rawRadar" aria-label="原始雷达对比图"></canvas></div><div class="radar-caption">${escape(r.name)} · ${r.rows} × ${r.cols}</div>`)}${panel("实际数值预处理", ready ? `<div class="radar-wrap"><canvas id="processedRadar" aria-label="数值预处理对比图"></canvas></div><div class="radar-caption">${fmt(p.durationMs, 2)} ms · ${p.version}</div>` : '<div class="empty"><b>等待运行</b>对当前输入矩阵减去逐行均值，再施加线性时间增益。</div>')}${panel("RTM 成像输出", '<div class="empty"><b>尚未连接 RTM 求解器</b>连接经验证的求解器后才显示成像结果。</div>' + btn("查看算法接入契约", "adapter", "small"))}</div>`, '<span class="badge blue">雷达支路</span>')}
+          ${panel("影像检测 · Python 自动推理", `<div id="currentImageAlgorithm" class="image-algorithm-card"><div class="algorithm-card-head"><div><span class="status-kicker">VIDEO / CRACK CANDIDATE</span><h3>crack-seg U-Net · 裂缝分割</h3><p class="muted">导入现场视频后，平台把录像上传到本机 Python 服务，按采样帧调用 <code>algorithm/defect_detect.py</code>，输出掩码、候选观测和可复核 JSON。</p></div><span class="badge mint">自动启动</span></div>${videoInferenceStatusMarkup(videoJob, true)}${reconstructionMarkup(videoJob, true)}<div class="actions">${btn("进入多相机候选复核", "open-video-inference", "primary")}<a class="btn subtle" href="algorithm/README.md" target="_blank" rel="noopener">查看算法说明 ↗</a><button type="button" class="btn subtle" data-display-diagnostics="export">导出显示诊断</button></div></div>`, '<span class="badge mint">本机 Python</span>')}
+          ${panel("雷达处理 · 外部矩阵", `${radarControls()}${radarFlow}<div class="grid-3 processing-output-grid">${panel("原始输入", `<div class="radar-wrap"><canvas id="rawRadar" aria-label="原始雷达对比图"></canvas></div><div class="radar-caption">${escape(r.name)}${r.source === "empty" ? " · 等待接入" : ` · ${r.rows} × ${r.cols}`}</div>`)}${panel("实际数值预处理", ready ? `<div class="radar-wrap"><canvas id="processedRadar" aria-label="数值预处理对比图"></canvas></div><div class="radar-caption">${fmt(p.durationMs, 2)} ms · ${p.version}</div>` : '<div class="empty"><b>等待运行</b>对当前输入矩阵减去逐行均值，再施加线性时间增益。</div>')}${panel("RTM 成像输出", '<div class="empty"><b>尚未连接 RTM 求解器</b>连接经验证的求解器后才显示成像结果。</div>' + btn("查看算法接入契约", "adapter", "small"))}</div>`, '<span class="badge blue">雷达支路</span>')}
         </div>
         <aside class="processing-side-rail">
           ${panel("本阶段交付物", `<div class="processing-deliverable-list"><div><b>视频</b><span>候选帧、掩码、叠加图、review.json</span></div><div><b>雷达</b><span>原始矩阵、预处理矩阵、参数与运行记录</span></div><div><b>汇合</b><span>病害清单、影像复核和三维定位</span></div></div>${note("两条支路共享任务、批次和证据索引，但不把视频帧送入雷达模型，也不把雷达矩阵送入影像模型。", "info")}`)}
@@ -830,6 +1229,8 @@
       </div>`;
   }
   function defectsPage() {
+    if (noVideoSelected()) return videoDataPage("defects");
+    if (videoMode()) return heading("病害清单与复核 · 当前视频", "候选、帧证据、模型和复核记录均来自上方选中的视频。", "02 / 智能解析", btn("本视频报告", "go-video-report", "subtle")) + moduleTabs() + multiscenePanel();
     return (
       heading(
         "病害清单与复核",
@@ -843,6 +1244,8 @@
     );
   }
   function twinPage() {
+    if (noVideoSelected()) return videoDataPage("twin");
+    if (videoMode()) return videoDataPage("twin");
     if (evidenceActive()) return heading("三维数字孪生", "现场疑似点与视频 / 雷达共用编号、先后顺序和位置；未识别点使用统一标记，已有分类保留。", "03 / 对应计划第 3 部分", btn("返回影像三维复核", "go-image-review", "subtle")) + moduleTabs() + '<div id="evidenceMount"></div>' + `<div class="grid-main evidence-twin"><div>${panel("现场疑似位置空间对应", scene(true,true), '<span class="badge mint">当前任务现场标注 · 未作风险鉴定</span>',false)}${panel("现场疑似位置环向展开",'<canvas id="evidenceUnfold" aria-label="现场病害里程与环向位置"></canvas><p class="muted">点选标记可按同一坐标定位并对齐检测车。</p>')}</div><aside>${panel("所选现场疑似位置环位",'<canvas id="evidenceSection" aria-label="现场病害横断面位置"></canvas>')}${panel("对应规则",'<p>录像时间进度对应任务区间，画面横向对应指定环位；雷达道序对应里程，采样序对应相对深度。人工位置与已校核测线标定也可填写。</p><p class="muted">相对映射保持先后順序，不等于实测定位。标注不自动改变演示 SHI、预警或历史派生值。切回“原有演示台账”可使用原历史评估。</p>')}</aside></div>`;
     return (
       heading(
@@ -868,6 +1271,8 @@
     return `<div class="table-wrap"><table><thead><tr><th>${d.id}</th><th>2026 年 7 月</th><th>2026 年 9 月</th><th>变化</th></tr></thead><tbody><tr><td>等效直径 / m</td><td>${fmt(old.diameter, 3)}</td><td>${fmt(latest.diameter, 3)}</td><td>+${fmt(latest.diameter - old.diameter, 3)}</td></tr><tr><td>健康评分</td><td>${fmt(old.score)}</td><td>${fmt(latest.score)}</td><td>${fmt(latest.score - old.score)}</td></tr></tbody></table></div><p class="muted" style="font-size:10px">历史直径和长度 = 当前 × 0.8，面积 = 当前 × 0.64；两期使用同一评估配置。用于对比操作演示。</p>${healthHistory()}`;
   }
   function healthPage() {
+    if (noVideoSelected()) return videoDataPage("health");
+    if (videoMode()) return videoDataPage("health");
     const a = C.assess(state);
     return (
       heading(
@@ -1000,6 +1405,8 @@
     }</p><h3>七、建议与局限性</h3><p>优先专项复核高风险对象，结合钻孔、其他无损检测与运营条件确认治理方案。停运、限速等重大措施须专业复核。复检证据应记录后再关闭预警，不通过点击操作改变病害真实状态。</p><p>${s.limitations.map(escape).join("<br>")}</p><p>RCAN、RTM 雷达接口、真实车辆硬件及经验证有限元尚未接入；当前影像检测采用 crack-seg U-Net 裂缝分割流程，视频任务结果会写入多相机候选复核区，但正式病害记录仍需人工确认。结构响应只提供简化圆环参数敏感性，方案预算与降险为演示假设。</p></article>`;
   }
   function reportsPage() {
+    if (noVideoSelected()) return videoDataPage("reports");
+    if (videoMode()) return videoDataPage("reports");
     const snap = C.exportSnapshot(state);
     return (
       heading(
@@ -1029,6 +1436,13 @@
     toast("已生成 " + name);
   }
   function csvExport() {
+    if (videoMode()) {
+      const job = currentVideoInference(), bundle = currentVideoBundle();
+      if (!job?.id || !bundle) throw Error("请先核验当前视频档案再导出。");
+      const rows = [["视频编号", "候选编号", "帧", "时间_s", "置信度", "复核状态"], ...(bundle.candidates || []).map(row => [job.id, row.id, row.imageName, row.timeSec, row.confidence, bundle.review.decisions[row.id] || "pending"])];
+      download(job.id + "-candidates.csv", "\ufeff" + rows.map(row => row.map(value => '"' + String(value ?? "").replace(/"/g, '""') + '"').join(",")).join("\r\n"), "text/csv;charset=utf-8");
+      return;
+    }
     const ds = C.getDefects(state),
       a = C.assess(state),
       rows = [
@@ -1088,7 +1502,15 @@
       "text/csv;charset=utf-8",
     );
   }
-  function htmlExport() {
+  async function htmlExport() {
+    if (videoMode()) {
+      const job = currentVideoInference();
+      if (!job?.id || !currentVideoBundle()) throw Error("请先核验当前视频档案再导出。");
+      const response = await fetch(`/api/video-inference/file/${job.id}/reports/report.html`, { cache: "no-store" });
+      if (!response.ok) throw Error("本视频归档报告尚未生成。");
+      download(job.id + "-report.html", await response.text(), "text/html;charset=utf-8");
+      return;
+    }
     const snap = C.exportSnapshot(state),
       body = reportBody(snap);
     const css =
@@ -1266,12 +1688,12 @@
   function drawCanvases() {
     const r = radarData();
     const rawCanvas = $("#rawRadar");
-    if (rawCanvas) {
+    if (rawCanvas && r.source !== "empty") {
       paintRadar(rawCanvas, r.matrix, true, palette, r.metadata);
       if (r.source === "demo" && overlayRegions) drawRoi(rawCanvas, chosen());
     }
     const waveCanvas = $("#wave");
-    if (waveCanvas) drawWave(waveCanvas, r);
+    if (waveCanvas && r.source !== "empty") drawWave(waveCanvas, r);
     if ($("#processedRadar") && processed)
       paintRadar(
         $("#processedRadar"),
@@ -1338,12 +1760,17 @@
       )
       .join("");
     $("#dataBadge").textContent =
-      evidenceActive() ? "现场标注 · 相对位置对应" : radarMode === "import" && ["radar", "processing"].includes(route)
+      noVideoSelected() ? "未选择数据" : videoMode() && !["tasks", "radar"].includes(route) ? "当前视频 · 同源数据" : evidenceActive() ? "现场标注 · 相对位置对应" : radarMode === "import" && ["radar", "processing"].includes(route)
         ? "导入矩阵 · 病害仍为演示"
         : "演示数据";
     window.TunnelVideoMonitor?.beforeRender(route);
     window.TunnelRadarAcquisition?.beforeRender(route, radarContext());
     try {
+      document.body.dataset.route = route;
+      window.TunnelDisplayDiagnostics?.render(route, new Error().stack);
+      $("#page").dataset.route = route;
+      $("#page").dataset.videoMode = videoSelection().mode;
+      updateVideoWorkspaceBar();
       $("#page").innerHTML = routes[route]();
       if (route === "tasks") {
         const t = task();
@@ -1354,6 +1781,7 @@
           taskName: t.name,
         });
       }
+      if (route === "tasks" && videoMode()) restoreSelectedVideoPlayback();
       if (route === "radar") {
         window.TunnelRadarAcquisition?.mount($("#radarAcquisitionMount"), {
           context: radarContext(),
@@ -1373,6 +1801,10 @@
         followChanged:on=>{if(on&&taskRunning)toggleTask();},
         follow:(ratio,id)=>{if(taskRunning){clearInterval(timer);timer=null;taskRunning=false;}const t=task();t.progress=Math.max(0,Math.min(1,ratio));t.status="paused";if(id&&state.evidenceSelectedId!==id){state.evidenceSelectedId=id;syncScene();window.TunnelEvidenceLink.refresh();}else syncTask();if($("#taskPercent"))$("#taskPercent").textContent=fmt(t.progress*100)+"%";if($("#taskBar"))$("#taskBar").style.width=t.progress*100+"%";if($("#taskDistance"))$("#taskDistance").textContent="相对对齐位置 "+fmt(t.progress*(t.end-t.start))+" m";if($("#taskStatus"))$("#taskStatus").textContent=t.name+" · 录像进度对应";refreshTaskRow();},
       });
+      if (route === "tasks" && videoMode()) {
+        const modeSelect = $("#evidenceSceneMode");
+        if (modeSelect) { modeSelect.value = "evidence"; modeSelect.disabled = true; modeSelect.title = "当前视频只显示同源位置；原有演示请使用页面上方的数据来源切换。"; }
+      }
       drawCanvases();
     } catch (e) {
       $("#page").innerHTML =
@@ -1388,6 +1820,7 @@
     processingToken = 0,
     modelController = null;
   function select(id, fromFrame) {
+    if (videoMode() && !["tasks", "radar"].includes(route)) return;
     if (!all().some((d) => d.id === id)) return;
     state.selectedId = id;
     radarMode = "demo";
@@ -1597,6 +2030,7 @@
       background = $("#background")?.checked ?? true;
     if (!Number.isFinite(gain) || gain < 0 || gain > 20)
       throw Error("增益须为 0～20。");
+    if (r.source === "empty") throw Error("请先导入或选择雷达矩阵，再运行数值预处理。");
     const token = ++processingToken;
     state.processing = {
       ...state.processing,
@@ -1741,6 +2175,17 @@
     if (el.id === "taskEvidenceDrawer") taskPanels.evidence = el.open;
   }, true);
   const actions = {
+    "video-refresh-catalog": () => Promise.all([refreshVideoCatalog(), refreshWorkbenchArchives()]),
+    "workbench-load-archive": restoreWorkbenchArchive,
+    "video-use-demo": () => selectVideoWorkspace("__demo"),
+    "go-video-acquisition": () => { location.hash = "tasks"; },
+    "video-reload-data": () => loadVideoWorkspace(videoSelection().videoId, { repaint: true }),
+    "video-save-review": saveVideoReview,
+    "go-video-twin": () => navigate("twin"),
+    "go-video-health": () => navigate("health"),
+    "go-video-report": () => navigate("reports"),
+    "video-demo-simulation": async () => { await selectVideoWorkspace("__demo"); navigate("simulation"); },
+
     "task-evidence": () => showTaskPanel("#taskEvidenceDrawer"),
     "task-parameters": () => showTaskPanel("#taskConfiguration"),
     "task-capture-video": () => {
@@ -1770,6 +2215,20 @@
       scrollToAnchor("image-review");
       if (route !== "defects") navigate("defects");
     },
+    "start-video-reconstruction": async () => {
+      const source = currentVideoInference(), job = currentVideoReconstruction();
+      if (job?.connectionError) { window.TunnelVideoReconstruction.resume(job); toast("正在重新连接原建模任务。"); return; }
+      const button = $('[data-reconstruction-field="start"]');
+      if (button) button.disabled = true;
+      try {
+        await window.TunnelVideoReconstruction.start(source, { maxFrames: Number($("#reconstructionFrames")?.value || 24) });
+        toast("已手动启动本次视频的三维重建与定位。");
+      } catch (error) {
+        if (button) button.disabled = false;
+        throw error;
+      }
+    },
+    "open-video-reconstruction": openReconstructedScene,
     "open-video-inference": () => {
       if (route !== "defects") { navigate("defects"); requestAnimationFrame(() => scrollToAnchor("videoInferenceReview")); }
       else scrollToAnchor("videoInferenceReview");
@@ -2066,6 +2525,12 @@
     },
     "export-csv": csvExport,
     "export-json": () => {
+      if (videoMode()) {
+        const job = currentVideoInference(), bundle = currentVideoBundle();
+        if (!job?.id || !bundle) throw Error("请先核验当前视频档案再导出。");
+        download(job.id + "-report.json", JSON.stringify(bundle.report, null, 2), "application/json");
+        return;
+      }
       const s = C.exportSnapshot(state);
       download(
         "项目评估_" + state.batch + ".json",
@@ -2116,6 +2581,7 @@
   document.addEventListener("change", async (e) => {
     const el = e.target;
     try {
+      if (el.id === "videoDatasetSelect") { await selectVideoWorkspace(el.value); return; }
       if (el.id === "batch") {
         haltTask();
         processingToken++;
@@ -2161,7 +2627,7 @@
         render();
       }
       if (el.id === "radarSource") {
-        radarMode = el.value === "demo" ? "demo" : "import";
+        radarMode = el.value === "none" ? "none" : el.value === "demo" ? "demo" : "import";
         selectedRadar = Number(el.value) || 0;
         trace = 0;
         processed = null;
@@ -2391,17 +2857,75 @@
       });
     } else window.scrollTo(0, 0);
   });
+  document.addEventListener("tunnel-video-reconstruction", (event) => {
+    const job = window.TunnelVideoData.validateReconstruction(event.detail?.job);
+    if (job?.id && state.retiredVideoIds.includes(job.id)) return;
+    if (!job?.id || !job.batchId || !job.taskId) return;
+    const source = state.videoJobsById[job.id];
+    if (source?.batchId && (source.batchId !== job.batchId || source.taskId !== job.taskId)) return;
+    const previous = state.videoReconstructionJobs[job.id];
+    const changed = previous?.runId !== job.runId || previous?.status !== job.status;
+    state.videoReconstructionJobs[job.id] = job;
+    save({ quiet: true });
+    if (job.id === currentVideoInference()?.id && (route === "processing" || route === "defects")) refreshReconstructionViews();
+    if (changed && ["completed", "failed"].includes(job.status) && job.id === currentVideoInference()?.id) loadVideoWorkspace(job.id, { repaint: true });
+    if (changed && job.id === currentVideoInference()?.id && job.status === "completed") toast(`三维重建完成：${job.result?.localizedCandidates || 0} 个候选观测获得局部位置，可打开本次视频三维复核。`);
+    if (changed && job.id === currentVideoInference()?.id && job.status === "failed") toast(job.error || "本次三维建模未完成，原检测成果已保留。", true);
+  });
+  // 刷新浏览器后继续读取原任务，不重新启动 Python。
+  for (const job of Object.values(state.videoReconstructionJobs)) {
+    if (["queued", "running"].includes(job.status)) window.TunnelVideoReconstruction?.resume(job);
+  }
   document.addEventListener("tunnel-video-inference", (event) => {
-    const job = event.detail?.job;
-    if (!job || !job.batchId || !job.taskId) return;
-    state.videoInferenceJobs = state.videoInferenceJobs || {};
-    state.videoInferenceJobs[inferenceKey(job.batchId, job.taskId)] = job;
-    save();
-    if (route === "processing" || route === "defects") render();
-    if (job.status === "completed") toast(`视频 Python 推理完成：${job.result?.candidateCount || 0} 个裂缝候选已进入复核。`);
-    if (job.status === "failed") toast(job.error || "视频 Python 推理失败。", true);
+    const raw = event.detail?.job;
+    if (raw?.id && state.retiredVideoIds.includes(raw.id)) return;
+    // 导入新视频只接管当前视图；旧视频档案和身份仍可手动选择。
+
+    if (!raw || !raw.batchId || !raw.taskId) return;
+    const job = window.TunnelVideoData.validateInference(raw), key = inferenceKey(job.batchId, job.taskId);
+    const archived = job.id ? state.videoJobsById[job.id] : null;
+    if (archived?.batchId && (archived.batchId !== job.batchId || archived.taskId !== job.taskId)) return;
+    const previous = job.id ? state.videoJobsById[job.id] : pendingVideoUpload;
+    const statusChanged = previous?.id !== job.id || previous?.status !== job.status;
+    const known = job.id && !!state.videoJobsById[job.id];
+    const activate = event.detail.activate || (!known && job.id && key === inferenceKey(state.batch, task().id));
+    if (!job.id) pendingVideoUpload = job;
+    else state.videoJobsById[job.id] = job;
+    if (activate) {
+      state.videoSelectionByContext[key] = { mode: "video", videoId: job.id || null };
+      activeMultiscene = "uploaded";
+      ++workspaceLoadToken;
+    }
+    if (activate || state.videoInferenceJobs[key]?.id === job.id) state.videoInferenceJobs[key] = job;
+    save({ quiet: true });
+    const isCurrent = key === inferenceKey(state.batch, task().id) && videoMode() && videoSelection().videoId === (job.id || null);
+    if (isCurrent && activate) {
+      if (route === "processing" || (route === "defects" && $("#page").dataset.videoMode === "video")) {
+        refreshVideoInferenceViews(); refreshVideoDecisions(); updateVideoWorkspaceBar();
+      } else if (route === "tasks") { updateVideoWorkspaceBar(); refreshEvidenceViews(); }
+      else render();
+    }
+    if (isCurrent && job.id && event.detail.activate) loadVideoWorkspace(job.id);
+    if (isCurrent && !job.id && job.status === "failed") { updateVideoWorkspaceBar(); refreshVideoCatalog().catch(() => {}); }
+    else if (isCurrent && (route === "processing" || route === "defects")) refreshVideoInferenceViews();
+
+    if (statusChanged && job.id && ["completed", "failed", "cancelled"].includes(job.status)) {
+      if (isCurrent) loadVideoWorkspace(job.id, { repaint: true });
+      refreshVideoCatalog().catch(() => {});
+    }
+    if (isCurrent && statusChanged && job.status === "completed") toast(`本视频 Python 推理完成：${job.result?.candidateCount || 0} 个裂缝候选已进入复核。`);
+    if (isCurrent && statusChanged && job.status === "failed") toast(job.error || "本视频 Python 推理失败。", true);
   });
   document.addEventListener("tunnel-monitor-state", (event) => {
+    const d = event.detail;
+    if (d?.active && ["network", "camera"].includes(d.kind) && !d.videoId && d.batchId === state.batch && d.taskId === task().id && d.sourceId &&
+        (videoSelection().videoId || pendingVideoUpload?.liveSourceId !== d.sourceId)) {
+      const key = inferenceKey(state.batch, task().id), previousId = videoSelection().videoId || state.videoInferenceJobs[key]?.id || null;
+      ++workspaceLoadToken;
+      state.videoSelectionByContext[key] = { mode: "video", videoId: null, replaceVideoId: previousId };
+      pendingVideoUpload = { id: null, batchId: state.batch, taskId: task().id, filename: d.sourceName || "当前实时视频源", status: "not_started", liveSourceId: d.sourceId, result: null, progress: { phase: "当前实时源尚未保存为录像档案", percent: 0 } };
+      save({ quiet: true }); updateVideoWorkspaceBar(); syncScene();
+    }
     const capture = $("#taskCaptureVideo");
     if (capture) { const identity = window.TunnelVideoMonitor.evidenceIdentity(); capture.disabled = !(identity.ready && identity.sourceId); }
     if (route === "tasks") $("#dataBadge").textContent = evidenceActive() ? "现场标注 · 相对位置对应" : event.detail.active
@@ -2443,6 +2967,9 @@
       }
     });
   }
+  if (startup.reset) save({ quiet: true });
+  Promise.all([refreshVideoCatalog(), refreshWorkbenchArchives()]).catch(() => {});
+  if (videoMode() && videoSelection().videoId) loadVideoWorkspace(videoSelection().videoId, { repaint: true });
   setupMobileNavigation();
   $("#helpButton").onclick = () => {
     guideDialog();
@@ -2462,6 +2989,8 @@
     version: "2.0",
   };
   function alertsPage() {
+    if (noVideoSelected()) return videoDataPage("alerts");
+    if (videoMode()) return videoDataPage("alerts");
     const ads = currentAlerts(),
       ds = all();
     return (
@@ -2499,6 +3028,8 @@
     );
   }
   function simulationPage() {
+    if (noVideoSelected()) return videoDataPage("simulation");
+    if (videoMode()) return videoDataPage("simulation");
     const conf = state.simulation[simTab]?.params || {};
     const tabsHtml = `<div class="pill-tabs">${[
       ["sample", "01 雷达样本"],
